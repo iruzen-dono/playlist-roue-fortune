@@ -2,9 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
-import QuizMode from '../components/QuizMode';
-import JukeboxMode from '../components/JukeboxMode';
-import PlayerList from '../components/PlayerList';
+import QueueDisplay from '../components/QueueDisplay';
 
 export default function GuestView() {
   const { sessionId } = useParams();
@@ -45,185 +43,102 @@ export default function GuestView() {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>🎡 {sessionId}</h1>
-        <div style={styles.points}>
-          🪙 {game.playerPoints} points
+    <div className="guest-page">
+      <div className="guest-header">
+        <div>
+          <div className="guest-title">{sessionId}</div>
         </div>
+        <div className="points-badge">{game.playerPoints} pts</div>
       </div>
 
-      <PlayerList guests={game.guests} compact />
-
-      {/* Mode Quiz */}
+      {/* Quiz mode */}
       {game.mode === 'MODE_QUIZ' && (
-        <QuizMode
-          round={game.quizRound}
-          timer={game.quizTimer}
-          onSubmit={submitQuizAnswer}
-        />
+        <QuizCard round={game.quizRound} timer={game.quizTimer} onSubmit={submitQuizAnswer} />
       )}
 
-      {/* Mode Jukebox */}
+      {/* Jukebox mode */}
       {game.mode === 'MODE_JUKEBOX' && (
-        <div>
-          {/* Morceau en cours */}
+        <>
           {game.currentTrack && (
-            <div style={styles.nowPlaying}>
-              <h3>▶ En cours</h3>
-              <p style={styles.trackTitle}>{game.currentTrack.title}</p>
-              <p style={styles.trackArtist}>{game.currentTrack.artist}</p>
-              <div style={styles.actionRow}>
-                <button style={styles.skipBtn} onClick={voteSkip}>
-                  ⏭ SKIP (-30 pts)
-                </button>
-                <button style={styles.boostBtn} onClick={() => voteBoost(game.currentTrack.trackUri)}>
-                  🚀 BOOST (-50 pts)
-                </button>
+            <div className="panel now-playing" style={{ marginBottom: 16 }}>
+              <div className="now-label">EN COURS</div>
+              <div className="now-title">{game.currentTrack.title}</div>
+              <div className="now-artist">{game.currentTrack.artist}</div>
+              <div className="action-row">
+                <button className="btn btn-danger" onClick={voteSkip}>Skip</button>
+                <button className="btn btn-secondary" onClick={() => voteBoost(game.currentTrack.trackUri)}>Boost</button>
               </div>
             </div>
           )}
 
-          {/* Barre de recherche */}
-          <div style={styles.searchBox}>
-            <input
-              style={styles.searchInput}
-              placeholder="Chercher un morceau Spotify..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && searchTracks()}
-            />
-            <button style={styles.searchBtn} onClick={searchTracks}>
-              🔍
-            </button>
+          <div className="search-box">
+            <input className="search-input" placeholder="Rechercher un morceau..." value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchTracks()} />
+            <button className="search-btn" onClick={searchTracks}>→</button>
           </div>
 
-          {/* Résultats */}
           {searchResults.length > 0 && (
-            <div style={styles.results}>
-              <h4>Résultats</h4>
+            <div className="search-results">
               {searchResults.map(track => (
-                <div key={track.id} style={styles.resultItem}>
-                  <div>
-                    <p style={styles.trackTitle}>{track.name}</p>
-                    <p style={styles.trackArtist}>
+                <div key={track.id} className="search-result-item">
+                  <div className="search-result-info">
+                    <div className="search-result-title">{track.name}</div>
+                    <div className="search-result-artist">
                       {track.artists.map(a => a.name).join(', ')}
-                      <span style={styles.albumName}> — {track.album.name}</span>
-                    </p>
+                    </div>
                   </div>
-                  <button style={styles.addBtn} onClick={() => addTrack(track)}>
-                    + 5pts
-                  </button>
+                  <button className="add-btn" onClick={() => addTrack(track)}>+5</button>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </>
       )}
 
       {game.mode === 'MODE_LOBBY' && (
-        <div style={styles.lobby}>
-          <p>En attente que l'hôte lance la soirée...</p>
-        </div>
+        <div className="lobby-waiting">En attente que l'hôte lance la soirée...</div>
       )}
     </div>
   );
 }
 
-const styles = {
-  container: {
-    minHeight: '100vh',
-    background: '#0f0f23',
-    color: 'white',
-    fontFamily: 'system-ui, sans-serif',
-    padding: '16px',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '16px',
-  },
-  title: { fontSize: '1.3rem', margin: 0 },
-  points: {
-    background: '#ff6b35',
-    padding: '6px 14px',
-    borderRadius: '20px',
-    fontWeight: 'bold',
-    fontSize: '0.9rem',
-  },
-  nowPlaying: {
-    background: '#1a1a3e',
-    padding: '16px',
-    borderRadius: '12px',
-    marginBottom: '16px',
-    textAlign: 'center',
-    border: '1px solid #2a2a5e',
-  },
-  trackTitle: { fontSize: '1.2rem', fontWeight: 'bold', margin: '4px 0' },
-  trackArtist: { color: '#8888aa', fontSize: '0.9rem', margin: '4px 0' },
-  albumName: { color: '#6666aa' },
-  actionRow: { display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '12px' },
-  skipBtn: {
-    padding: '10px 20px',
-    borderRadius: '8px',
-    border: '1px solid #ff6b6b',
-    background: 'transparent',
-    color: '#ff6b6b',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-  },
-  boostBtn: {
-    padding: '10px 20px',
-    borderRadius: '8px',
-    border: '1px solid #ffd700',
-    background: 'transparent',
-    color: '#ffd700',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-  },
-  searchBox: {
-    display: 'flex',
-    gap: '8px',
-    marginBottom: '12px',
-  },
-  searchInput: {
-    flex: 1,
-    padding: '12px',
-    borderRadius: '8px',
-    border: '1px solid #333',
-    background: '#1a1a3e',
-    color: 'white',
-    fontSize: '1rem',
-  },
-  searchBtn: {
-    padding: '12px',
-    borderRadius: '8px',
-    border: 'none',
-    background: '#ff6b35',
-    cursor: 'pointer',
-    fontSize: '1.2rem',
-  },
-  results: {
-    background: '#1a1a3e',
-    padding: '12px',
-    borderRadius: '12px',
-    border: '1px solid #2a2a5e',
-  },
-  resultItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '10px 0',
-    borderBottom: '1px solid #2a2a5e',
-  },
-  addBtn: {
-    padding: '6px 14px',
-    borderRadius: '6px',
-    border: '1px solid #ff6b35',
-    background: 'transparent',
-    color: '#ff6b35',
-    cursor: 'pointer',
-  },
-  lobby: { textAlign: 'center', marginTop: '40px', color: '#8888aa' },
-};
+function QuizCard({ round, timer, onSubmit }) {
+  const [answer, setAnswer] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(timer);
+
+  useState(() => {
+    if (timer <= 0) return;
+    const interval = setInterval(() => {
+      setTimeLeft(prev => prev <= 1 ? (clearInterval(interval), 0) : prev - 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  });
+
+  const handleSubmit = () => {
+    if (!answer.trim() || submitted) return;
+    onSubmit(answer.trim());
+    setSubmitted(true);
+  };
+
+  return (
+    <div className="quiz-container">
+      <div className="quiz-header">Blind-test — Round {round}</div>
+      <div className={`quiz-timer ${timeLeft <= 10 ? 'quiz-timer-danger' : 'quiz-timer-safe'}`}>
+        {timeLeft > 0 ? `${timeLeft}s` : 'Temps !'}
+      </div>
+      <div className="quiz-hint">Quel morceau est en train de jouer ?</div>
+      {!submitted && timeLeft > 0 ? (
+        <>
+          <input className="quiz-input" placeholder="Titre ou artiste..." value={answer}
+            onChange={e => setAnswer(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSubmit()} />
+          <button className="btn btn-primary btn-full" onClick={handleSubmit}>Proposer</button>
+        </>
+      ) : (
+        <div className={submitted ? 'quiz-submitted' : 'quiz-reveal'}>
+          {submitted ? 'Réponse envoyée' : 'Révélation...'}
+        </div>
+      )}
+    </div>
+  );
+}

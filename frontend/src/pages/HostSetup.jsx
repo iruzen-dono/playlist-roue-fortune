@@ -8,7 +8,7 @@ export default function HostSetup() {
   const game = useGame();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
-  const [sessionId, setSessionId] = useState(`soiree-${Date.now()}`);
+  const [sessionId, setSessionId] = useState(`s-${Date.now().toString(36)}`);
   const [error, setError] = useState('');
 
   const createSession = () => {
@@ -22,80 +22,39 @@ export default function HostSetup() {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>🎡 Playlist Roue de la Fortune</h1>
-        <p style={styles.subtitle}>Configurez votre soirée musicale</p>
+    <div className="page">
+      <div className="card">
+        <div className="card-header">
+          <div className="logo">Roue de la Fortune</div>
+          <div className="subtitle">Soirée musicale interactive</div>
+        </div>
 
-        <input
-          style={styles.input}
-          placeholder="ID de la session"
-          value={sessionId}
-          onChange={e => setSessionId(e.target.value)}
-        />
+        <div className="field">
+          <label className="label">Nom de la session</label>
+          <input
+            className="input"
+            value={sessionId}
+            onChange={e => setSessionId(e.target.value)}
+          />
+        </div>
 
-        <input
-          style={styles.input}
-          type="password"
-          placeholder="Mot de passe hôte"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-        />
+        <div className="field">
+          <label className="label">Mot de passe hôte</label>
+          <input
+            className="input"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+          />
+        </div>
 
-        {error && <p style={styles.error}>{error}</p>}
+        {error && <div className="error">{error}</div>}
 
-        <button style={styles.button} onClick={createSession}>
-          🚀 Créer la soirée
+        <button className="btn btn-primary btn-full" onClick={createSession}>
+          Créer la session
         </button>
       </div>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#0f0f23',
-    color: 'white',
-    fontFamily: 'system-ui, sans-serif',
-  },
-  card: {
-    background: '#1a1a3e',
-    padding: '3rem',
-    borderRadius: '16px',
-    textAlign: 'center',
-    maxWidth: '400px',
-    width: '90%',
-    border: '1px solid #2a2a5e',
-  },
-  title: { fontSize: '2rem', margin: '0 0 0.5rem' },
-  subtitle: { color: '#8888aa', marginBottom: '2rem' },
-  input: {
-    display: 'block',
-    width: '100%',
-    padding: '12px',
-    margin: '12px 0',
-    borderRadius: '8px',
-    border: '1px solid #333',
-    background: '#2a2a5e',
-    color: 'white',
-    fontSize: '1rem',
-    boxSizing: 'border-box',
-  },
-  button: {
-    width: '100%',
-    padding: '14px',
-    marginTop: '12px',
-    borderRadius: '8px',
-    border: 'none',
-    background: 'linear-gradient(135deg, #ff6b35, #ff3c3c)',
-    color: 'white',
-    fontSize: '1.1rem',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-  },
-  error: { color: '#ff6b6b', fontSize: '0.9rem' },
-};

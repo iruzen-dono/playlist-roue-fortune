@@ -3,43 +3,27 @@ export default function PlayerList({ guests, compact }) {
 
   if (compact) {
     return (
-      <div style={styles.compactRow}>
+      <div className="player-compact">
         {sorted.map(g => (
-          <div key={g.username} style={styles.compactBadge}>
+          <div key={g.username} className="player-chip">
             <span>{g.username}</span>
-            <span style={styles.badgePts}>{g.points}🪙</span>
+            <span className="player-chip-points">{g.points}</span>
           </div>
         ))}
+        {sorted.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Aucun participant</span>}
       </div>
     );
   }
 
   return (
-    <ul style={styles.list}>
+    <ul className="player-list">
       {sorted.map(g => (
-        <li key={g.username} style={styles.item}>
-          <span style={styles.name}>{g.username}</span>
-          <span style={styles.points}>{g.points} 🪙</span>
+        <li key={g.username} className="player-row">
+          <span className="player-name">{g.username}</span>
+          <span className="player-points">{g.points} pts</span>
         </li>
       ))}
-      {sorted.length === 0 && <li style={styles.empty}>Aucun joueur...</li>}
+      {sorted.length === 0 && <div style={{ padding: '12px 0', color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>Aucun participant</div>}
     </ul>
   );
 }
-
-const styles = {
-  list: { listStyle: 'none', padding: 0, margin: 0 },
-  item: {
-    display: 'flex', justifyContent: 'space-between', padding: '8px 12px',
-    borderBottom: '1px solid #2a2a5e', fontSize: '1rem',
-  },
-  name: { fontWeight: 'bold' },
-  points: { color: '#ffd700' },
-  empty: { color: '#8888aa', textAlign: 'center', padding: '10px' },
-  compactRow: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' },
-  compactBadge: {
-    background: '#2a2a5e', padding: '4px 12px', borderRadius: '16px',
-    display: 'flex', gap: '6px', fontSize: '0.85rem',
-  },
-  badgePoints: { color: '#ffd700' },
-};
