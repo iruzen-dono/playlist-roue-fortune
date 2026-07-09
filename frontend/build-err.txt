@@ -1,0 +1,43 @@
+[31m✗[39m Build failed in 68ms
+warnings
+  One of the glob patterns doesn't match any files. Please remove or fix the following: {
+  "globDirectory": "C:\\Users\\jules\\Desktop\\STACK\\playlist-roue-fortune\\frontend\\dist",
+  "globPattern": "**/*.{js,wasm,css,html}",
+  "globIgnores": [
+    "**/node_modules/**/*",
+    "sw.js",
+    "workbox-*.js"
+  ]
+}
+
+[31merror during build:
+[31mBuild failed with 1 error:
+
+[plugin vite-plugin-pwa:build]
+Error: Build failed with 1 error:
+
+[31m[UNRESOLVED_IMPORT] [0mCould not resolve '../components/JukeboxMode' in src/pages/GuestView.jsx
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/GuestView.jsx:6:25 [38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m6 │[0m [38;5;249mi[0m[38;5;249mm[0m[38;5;249mp[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mJ[0m[38;5;249mu[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249mb[0m[38;5;249mo[0m[38;5;249mx[0m[38;5;249mM[0m[38;5;249mo[0m[38;5;249md[0m[38;5;249me[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mm[0m[38;5;249m [0m"../components/JukeboxMode"[38;5;249m;[0m
+ [38;5;240m  │[0m                         ─────────────┬─────────────  
+ [38;5;240m  │[0m                                      ╰─────────────── Module not found.
+ [38;5;240m  │[0m 
+ [38;5;240m  │[0m [38;5;115mHelp[0m: 'src/pages/GuestView.jsx' is imported by the following path:
+ [38;5;240m  │[0m         - src/pages/GuestView.jsx
+ [38;5;240m  │[0m         - src/App.jsx
+ [38;5;240m  │[0m         - src/main.jsx
+ [38;5;240m  │[0m         - index.html
+[38;5;246m───╯[0m
+    at aggregateBindingErrorsIntoJsError (file:///C:/Users/jules/Desktop/STACK/playlist-roue-fortune/frontend/node_modules/rolldown/dist/shared/error-BHRSI0R7.mjs:48:18)
+    at plugin (file:///C:/Users/jules/Desktop/STACK/playlist-roue-fortune/frontend/node_modules/rolldown/dist/shared/bindingify-input-options-XPJLJOD0.mjs:1406:61)
+    at plugin.<computed> (file:///C:/Users/jules/Desktop/STACK/playlist-roue-fortune/frontend/node_modules/rolldown/dist/shared/bindingify-input-options-XPJLJOD0.mjs:1959:18)[31m
+    at aggregateBindingErrorsIntoJsError (file:///C:/Users/jules/Desktop/STACK/playlist-roue-fortune/frontend/node_modules/rolldown/dist/shared/error-BHRSI0R7.mjs:48:18)
+    at unwrapBindingResult (file:///C:/Users/jules/Desktop/STACK/playlist-roue-fortune/frontend/node_modules/rolldown/dist/shared/error-BHRSI0R7.mjs:18:128)
+    at #build (file:///C:/Users/jules/Desktop/STACK/playlist-roue-fortune/frontend/node_modules/rolldown/dist/shared/rolldown-build-CtPvmZgJ.mjs:3276:34)
+    at async buildEnvironment (file:///C:/Users/jules/Desktop/STACK/playlist-roue-fortune/frontend/node_modules/vite/dist/node/chunks/node.js:33011:66)
+    at async Object.build (file:///C:/Users/jules/Desktop/STACK/playlist-roue-fortune/frontend/node_modules/vite/dist/node/chunks/node.js:33433:19)
+    at async Object.buildApp (file:///C:/Users/jules/Desktop/STACK/playlist-roue-fortune/frontend/node_modules/vite/dist/node/chunks/node.js:33430:153)
+    at async CAC.<anonymous> (file:///C:/Users/jules/Desktop/STACK/playlist-roue-fortune/frontend/node_modules/vite/dist/node/cli.js:776:3) {
+  errors: [Getter/Setter]
+}[39m

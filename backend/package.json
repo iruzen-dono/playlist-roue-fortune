@@ -1,0 +1,14 @@
+{
+  "name": "playlist-roue-fortune-backend",
+  "version": "1.0.0",
+  "description": "Backend de la Playlist Roue de la Fortune",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
