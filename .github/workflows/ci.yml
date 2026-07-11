@@ -2,9 +2,9 @@ name: CI — Build & Test
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   # ─── BACKEND ──────────────────────────────────────
@@ -66,7 +66,7 @@ jobs:
 
   # ─── Docker image (optionnel — pour Render/Railway) ──
   docker:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/master'
     needs: [backend, frontend]
     runs-on: ubuntu-latest
     steps:

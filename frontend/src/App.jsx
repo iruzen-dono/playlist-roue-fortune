@@ -15,7 +15,7 @@ export default function App() {
             <Route path="/" element={<Navigate to="/host" replace />} />
             <Route path="/host" element={<HostSetup />} />
             <Route path="/host/:sessionId" element={<HostDashboard />} />
-            <Route path="/join" element={<GuestJoin />} />
+            <Route path="/join/:sessionId" element={<GuestJoin />} />
             <Route path="/guest/:sessionId" element={<GuestView />} />
           </Routes>
         </GameProvider>

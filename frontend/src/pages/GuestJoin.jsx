@@ -10,8 +10,8 @@ export default function GuestJoin() {
   const { socket } = useSocket();
   const game = useGame();
   const navigate = useNavigate();
-  const { code } = useParams();
-  const [sessionId, setSessionId] = useState(code || '');
+  const { sessionId: sessionIdFromUrl } = useParams();
+  const [sessionId, setSessionId] = useState(sessionIdFromUrl || '');
   const [username, setUsername] = useState('');
   const [step, setStep] = useState(1);
   const [likedGenres, setLikedGenres] = useState([]);
