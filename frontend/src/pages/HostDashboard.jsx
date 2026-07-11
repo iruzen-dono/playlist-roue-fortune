@@ -85,21 +85,8 @@ export default function HostDashboard() {
   }, [socket]);
 
   const loadSpotifySDK = () => {
-    if (window.Spotify) {
-      initPlayer();
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = SPOTIFY_SDK_URL;
-    script.onload = () => initPlayer();
-    script.onerror = () => {
-      setSpotifyError('Impossible de charger le SDK Spotify');
-      setSpotifyLoading(false);
-    };
-    document.body.appendChild(script);
-  };
-
-  const initPlayer = () => {
+    // CRITIQUE : définir le callback AVANT de charger le script,
+    // sinon le SDK l'appelle avant qu'il ne soit défini
     window.onSpotifyWebPlaybackSDKReady = () => {
       const player = new window.Spotify.Player({
         name: `Roue de la Fortune — ${sessionId}`,
@@ -152,6 +139,14 @@ export default function HostDashboard() {
 
       playerRef.current = player;
     };
+
+    const script = document.createElement('script');
+    script.src = SPOTIFY_SDK_URL;
+    script.onerror = () => {
+      setSpotifyError('Impossible de charger le SDK Spotify');
+      setSpotifyLoading(false);
+    };
+    document.body.appendChild(script);
   };
 
   const startEvening = () => {
