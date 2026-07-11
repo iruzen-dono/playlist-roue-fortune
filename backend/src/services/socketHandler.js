@@ -24,8 +24,22 @@ export function setupSocketHandlers(io) {
 
     // ─── HOST ACTIONS ──────────────────────────────────────────
 
+    // Rejoindre une session existante (après refresh de la page host)
+    socket.on('host:rejoin-session', ({ sessionId }, callback) => {
+      const game = sessions.get(sessionId);
+      if (!game) return callback?.({ error: 'Session not found', sessionId });
+
+      socket.join(`session:${sessionId}`);
+      socket.join(`host:${sessionId}`);
+      console.log(`[Host] Rejoined ${sessionId}, room has ${io.sockets.adapter.rooms.get(`session:${sessionId}`)?.size} sockets`);
+
+      callback?.({ ok: true, session: game.toJSON() });
+    });
+
     socket.on('host:create-session', async ({ sessionId, password }, callback) => {
+      console.log(`[Host] Create session: ${sessionId}`);
       if (password !== config.session.hostPassword) {
+        console.log(`[Host] Invalid password for ${sessionId}`);
         return callback?.({ error: 'Invalid host password' });
       }
 
@@ -174,14 +188,26 @@ export function setupSocketHandlers(io) {
 
     socket.on('guest:join', ({ sessionId, username, likedGenres, hatedGenres, favoriteArtists }, callback) => {
       const game = sessions.get(sessionId);
+      console.log(`[Guest] Join attempt: ${username} → ${sessionId}, game exists: ${!!game}, room size: ${game ? io.sockets.adapter.rooms.get(`session:${sessionId}`)?.size : 'N/A'}`);
       if (!game) return callback?.({ error: 'Session not found' });
 
       const added = game.addGuest(username);
-      if (!added) return callback?.({ error: 'Ce pseudo est déjà pris' });
+      if (!added) {
+        // Le guest existe déjà — mettre à jour ses données (rejoin après refresh)
+        console.log(`[Guest] ${username} rejoining ${sessionId}, updating data`);
+        const existing = game.guests.get(username);
+        if (existing) {
+          existing.likedGenres = likedGenres || existing.likedGenres;
+          existing.hatedGenres = hatedGenres || existing.hatedGenres;
+          existing.favoriteArtists = favoriteArtists || existing.favoriteArtists;
+        }
+      }
 
       currentSession = sessionId;
       currentUsername = username;
       socket.join(`session:${sessionId}`);
+
+      console.log(`[Guest] ${username} joined ${sessionId}, room now has ${io.sockets.adapter.rooms.get(`session:${sessionId}`)?.size} sockets`);
 
       // Enregistrer en DB (si configurée)
       saveGuest({ sessionId, username, likedGenres, hatedGenres, favoriteArtists, points: config.game.defaultPoints });

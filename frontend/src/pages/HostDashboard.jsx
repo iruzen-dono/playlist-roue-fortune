@@ -48,6 +48,20 @@ export default function HostDashboard() {
     game.setSessionId(sessionId);
   }, [sessionId]);
 
+  // Rejoindre la room socket si on arrive directement (refresh)
+  useEffect(() => {
+    if (!socket || !sessionId) return;
+    socket.emit('host:rejoin-session', { sessionId }, (res) => {
+      if (res?.error) {
+        console.warn('[Rejoin] Session not found:', res.error);
+        return;
+      }
+      if (res?.session) {
+        game.updateFromState(res.session);
+      }
+    });
+  }, [socket, sessionId]);
+
   // Quand le morceau change → le jouer sur Spotify
   useEffect(() => {
     if (!socket || !game.currentTrack?.trackUri || !spotifyConnected) return;
