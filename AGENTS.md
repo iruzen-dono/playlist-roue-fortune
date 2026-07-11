@@ -1,19 +1,22 @@
-# Playlist Roue de la Fortune — Agent Context
+# Roue de la Fortune — Session 2026-07-14
 
-## Architecture
-- Monorepo: `backend/` + `frontend/`
-- State machine: `MODE_QUIZ` ↔ `MODE_JUKEBOX` via Socket.io
-- Host Spotify Premium unique, invités sans compte
+## Fixes appliqués
 
-## Key Decisions
-- QR code → ngrok tunnel pour l'accès invité (pas de HTTPS/CORS en local)
-- LLM génère la playlist de départ + transitions (Groq/Ollama)
-- Blind-test d'abord (warm-up, distribution des points)
-- Interleaving round-robin pour la file d'attente (pas FIFO)
+1. **`useGameEvents` hook branché** — HostDashboard et GuestView n'importaient pas le hook, donc les events socket (game:state-update, quiz:start, etc.) ne mettaient jamais à jour l'UI. Blocage critique corrigé.
 
-## Env
-- `VITE_SPOTIFY_CLIENT_ID`
-- `VITE_SPOTIFY_CLIENT_SECRET`
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `LLM_API_KEY` (Groq ou Ollama endpoint)
+2. **Handler name bug** — `useGameEvents` référençait `handleNextSkipped` dans `socket.on()` mais la fonction s'appelait `handleTrackSkipped` → `socket.off()` échouait silencieusement.
+
+3. **Spotify token variable** — `getClientCredentialsToken()` assignait `token` (undefined) au lieu de `accessToken` (déclarée en scope module). Token jamais stocké → toutes les requêtes Spotify échouaient.
+
+## État actuel
+- Backend : 706 lignes, 5 services (gameState, socketHandler, llmService, spotifyService, supabaseService)
+- Frontend : React 19, PWA, build propre (288KB JS, 8.7KB CSS)
+- 4 pages + 5 composants + 2 contextes + 1 hook
+- CI/CD GitHub Actions + Dockerfile
+- Commit pushé : `5db488a`
+
+## Prochaines étapes possibles
+- Spotify Web Playback SDK (lecture côté host)
+- Synchro timer quiz via serveur (pas client-side)
+- Mode RECAP
+- Persistance session côté guest (reload safe)

@@ -186,6 +186,32 @@ a:hover { text-decoration: underline; }
   margin-top: 8px;
 }
 
+.btn-spotify {
+  background: #1db954;
+  border-color: #1db954;
+  color: white;
+  font-weight: 600;
+  padding: 12px 24px;
+  font-size: 1rem;
+}
+
+.btn-spotify:hover {
+  background: #169c46;
+  border-color: #169c46;
+}
+
+.panel-spotify {
+  text-align: center;
+  padding: 24px;
+  border-color: var(--border-active);
+}
+
+.badge-spotify {
+  background: rgba(29, 185, 84, 0.15);
+  color: #1db954;
+  font-weight: 600;
+}
+
 /* ─── Error ─── */
 .error {
   color: var(--danger);

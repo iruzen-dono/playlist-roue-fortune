@@ -3,6 +3,7 @@ import { GameState, MODE } from '../services/gameState.js';
 import { generateInitialPlaylist, generateQuizTrack } from '../services/llmService.js';
 import { searchTracks, resolveTracks } from '../services/spotifyService.js';
 import { saveGuest } from '../services/supabaseService.js';
+import { playTrack, pausePlayback, skipToNext, setDeviceId, getValidAccessToken } from '../services/spotifyOAuth.js';
 
 // Map sessionId → GameState
 const sessions = new Map();
@@ -127,6 +128,46 @@ export function setupSocketHandlers(io) {
       game.currentTrack = null;
       io.to(`session:${currentSession}`).emit('jukebox:track-skipped', { trackId });
       socket.emit('host:advance');
+    });
+
+    // ─── SPOTIFY PLAYBACK ──────────────────────────────────────
+
+    socket.on('host:spotify-device', ({ deviceId }) => {
+      if (!currentSession) return;
+      setDeviceId(currentSession, deviceId);
+      console.log(`[Spotify] Device registered for ${currentSession}: ${deviceId}`);
+      io.to(`host:${currentSession}`).emit('spotify:device-ready');
+    });
+
+    socket.on('host:play-track', async ({ trackUri, positionMs = 0 }, callback) => {
+      if (!currentSession) return callback?.({ error: 'No session' });
+      try {
+        await playTrack(currentSession, trackUri, positionMs);
+        callback?.({ ok: true });
+      } catch (err) {
+        console.error('[Playback] play error:', err.message);
+        callback?.({ error: err.message });
+      }
+    });
+
+    socket.on('host:pause', async (_, callback) => {
+      if (!currentSession) return;
+      try {
+        await pausePlayback(currentSession);
+        callback?.({ ok: true });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
+    });
+
+    socket.on('host:next-track-playback', async (_, callback) => {
+      if (!currentSession) return;
+      try {
+        await skipToNext(currentSession);
+        callback?.({ ok: true });
+      } catch (err) {
+        callback?.({ error: err.message });
+      }
     });
 
     // ─── GUEST ACTIONS ─────────────────────────────────────────

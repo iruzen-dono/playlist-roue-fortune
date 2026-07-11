@@ -8,7 +8,7 @@ export const config = {
   spotify: {
     clientId: process.env.SPOTIFY_CLIENT_ID,
     clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-    redirectUri: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:5173/callback',
+    redirectUri: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:5173/api/spotify/callback',
   },
 
   supabase: {

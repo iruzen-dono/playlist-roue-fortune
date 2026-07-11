@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
 import { useGameEvents } from '../hooks/useGameEvents';
@@ -7,16 +7,123 @@ import QRCodeComponent from '../components/QRCode';
 import PlayerList from '../components/PlayerList';
 import QueueDisplay from '../components/QueueDisplay';
 
+const SPOTIFY_SDK_URL = 'https://sdk.scdn.co/spotify-player.js';
+
 export default function HostDashboard() {
   const { sessionId } = useParams();
   const { socket } = useSocket();
   const game = useGame();
   useGameEvents();
   const [ngrokUrl, setNgrokUrl] = useState('');
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [spotifyLoading, setSpotifyLoading] = useState(false);
+  const [spotifyError, setSpotifyError] = useState('');
+  const playerRef = useRef(null);
+  const [searchParams] = useSearchParams();
+
+  // Détecter retour OAuth
+  useEffect(() => {
+    if (searchParams.get('spotify') === 'connected') {
+      setSpotifyLoading(true);
+      loadSpotifySDK();
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     game.setSessionId(sessionId);
   }, [sessionId]);
+
+  // Quand le morceau change → le jouer sur Spotify
+  useEffect(() => {
+    if (!socket || !game.currentTrack?.trackUri || !spotifyConnected) return;
+    socket.emit('host:play-track', {
+      trackUri: game.currentTrack.trackUri,
+      positionMs: 0,
+    }, (res) => {
+      if (res?.error) console.error('[Spotify] Play error:', res.error);
+    });
+  }, [socket, game.currentTrack?.trackUri, spotifyConnected]);
+
+  // Écouter spotify:device-ready
+  useEffect(() => {
+    if (!socket) return;
+    const handleReady = () => {
+      setSpotifyConnected(true);
+      setSpotifyLoading(false);
+    };
+    socket.on('spotify:device-ready', handleReady);
+    return () => socket.off('spotify:device-ready', handleReady);
+  }, [socket]);
+
+  const loadSpotifySDK = () => {
+    if (window.Spotify) {
+      initPlayer();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = SPOTIFY_SDK_URL;
+    script.onload = () => initPlayer();
+    script.onerror = () => {
+      setSpotifyError('Impossible de charger le SDK Spotify');
+      setSpotifyLoading(false);
+    };
+    document.body.appendChild(script);
+  };
+
+  const initPlayer = () => {
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      const player = new window.Spotify.Player({
+        name: `Roue de la Fortune — ${sessionId}`,
+        getOAuthToken: async (cb) => {
+          try {
+            const res = await fetch('/api/spotify/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId }),
+            });
+            const data = await res.json();
+            cb(data.access_token);
+          } catch (err) {
+            console.error('[Spotify] Token fetch failed:', err);
+            setSpotifyError('Erreur de connexion Spotify');
+          }
+        },
+        volume: 0.8,
+      });
+
+      player.addListener('ready', ({ device_id }) => {
+        console.log('[Spotify] Player ready:', device_id);
+        socket?.emit('host:spotify-device', { deviceId: device_id });
+      });
+
+      player.addListener('not_ready', ({ device_id }) => {
+        console.log('[Spotify] Player not ready:', device_id);
+        setSpotifyConnected(false);
+      });
+
+      player.addListener('initialization_error', ({ message }) => {
+        console.error('[Spotify] Init error:', message);
+        setSpotifyError(message);
+        setSpotifyLoading(false);
+      });
+
+      player.addListener('authentication_error', ({ message }) => {
+        console.error('[Spotify] Auth error:', message);
+        setSpotifyError('Authentification Spotify échouée. Reconnectez-vous.');
+        setSpotifyConnected(false);
+        setSpotifyLoading(false);
+      });
+
+      player.connect().then(success => {
+        if (!success) {
+          setSpotifyError('Impossible de connecter le player Spotify');
+          setSpotifyLoading(false);
+        }
+      });
+
+      playerRef.current = player;
+    };
+  };
 
   const startEvening = () => {
     socket.emit('host:start-evening', null, (res) => {
@@ -32,6 +139,10 @@ export default function HostDashboard() {
     socket.emit('host:next-track');
   };
 
+  const handleConnectSpotify = () => {
+    window.location.href = `/api/spotify/login?session=${sessionId}`;
+  };
+
   const joinUrl = ngrokUrl || `${window.location.origin}/join?session=${sessionId}`;
 
   return (
@@ -43,8 +154,31 @@ export default function HostDashboard() {
             <div className="logo">Roue de la Fortune</div>
             <div className="session-tag">{sessionId}</div>
           </div>
-          <div className="guest-count">{game.guests.length} participant{game.guests.length !== 1 ? 's' : ''}</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div className="guest-count">{game.guests.length} participant{game.guests.length !== 1 ? 's' : ''}</div>
+            {spotifyConnected && <span className="badge badge-spotify">🎵 Spotify</span>}
+          </div>
         </div>
+
+        {/* Statut Spotify */}
+        {!spotifyConnected && !spotifyLoading && (
+          <div className="panel panel-spotify">
+            <div className="panel-title">Musique</div>
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', marginBottom: 12 }}>
+              Connecte ton compte Spotify Premium pour lancer la musique
+            </p>
+            <button className="btn btn-spotify" onClick={handleConnectSpotify}>
+              🎧 Connecter Spotify
+            </button>
+            {spotifyError && <div className="error" style={{ marginTop: 8 }}>{spotifyError}</div>}
+          </div>
+        )}
+        {spotifyLoading && (
+          <div className="panel" style={{ textAlign: 'center' }}>
+            <div className="panel-title">Connexion Spotify</div>
+            <p style={{ color: 'var(--text-dim)' }}>Connexion en cours...</p>
+          </div>
+        )}
 
         {/* Grille principale */}
         <div className="dash-grid">
@@ -69,7 +203,7 @@ export default function HostDashboard() {
             <div className="controls-row">
               {game.mode === 'MODE_LOBBY' && (
                 <button className="btn btn-primary" onClick={startEvening}
-                  disabled={game.guests.length === 0}>
+                  disabled={game.guests.length === 0 || !spotifyConnected}>
                   Lancer la soirée
                 </button>
               )}
@@ -86,6 +220,9 @@ export default function HostDashboard() {
                   disabled={game.queue.length === 0}>
                   Morceau suivant
                 </button>
+              )}
+              {game.mode === 'MODE_RECAP' && (
+                <div className="badge badge-quiz">🎉 Fin de la soirée</div>
               )}
             </div>
           </div>
