@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
+import { useGameEvents } from '../hooks/useGameEvents';
 import QueueDisplay from '../components/QueueDisplay';
 
 export default function GuestView() {
   const { sessionId } = useParams();
   const { socket } = useSocket();
   const game = useGame();
+  useGameEvents();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
 

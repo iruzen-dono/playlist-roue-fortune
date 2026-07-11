@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
+import { useGameEvents } from '../hooks/useGameEvents';
 import QRCodeComponent from '../components/QRCode';
 import PlayerList from '../components/PlayerList';
 import QueueDisplay from '../components/QueueDisplay';
@@ -10,6 +11,7 @@ export default function HostDashboard() {
   const { sessionId } = useParams();
   const { socket } = useSocket();
   const game = useGame();
+  useGameEvents();
   const [ngrokUrl, setNgrokUrl] = useState('');
 
   useEffect(() => {

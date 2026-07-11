@@ -22,13 +22,13 @@ async function getClientCredentialsToken() {
 
   if (!response.ok) throw new Error(`Spotify auth failed: ${response.status}`);
   const data = await response.json();
-    tokenExpiresAt = Date.now() + data.expires_in * 1000;
-    token = data.access_token;
-  return token;
+  tokenExpiresAt = Date.now() + data.expires_in * 1000;
+  accessToken = data.access_token;
+  return accessToken;
 }
 
 async function ensureToken() {
-  if (token && Date.now() < tokenExpiresAt - 60000) return token;
+  if (accessToken && Date.now() < tokenExpiresAt - 60000) return accessToken;
   return getClientCredentialsToken();
 }
 

@@ -32,14 +32,14 @@ export function useGameEvents() {
     };
 
     socket.on('game:state-update', handleStateUpdate);
-    socket.on('jukebox:track-skipped', handleNextSkipped);
+    socket.on('jukebox:track-skipped', handleTrackSkipped);
     socket.on('quiz:start', handleQuizStart);
     socket.on('jukebox:open', handleJukeboxOpen);
     socket.on('game:next-track', (track) => game.setCurrentTrack(track));
 
     return () => {
       socket.off('game:state-update', handleStateUpdate);
-      socket.off('jukebox:track-skipped', handleNextSkipped);
+      socket.off('jukebox:track-skipped', handleTrackSkipped);
       socket.off('quiz:start', handleQuizStart);
       socket.off('jukebox:open', handleJukeboxOpen);
       socket.off('game:next-track');
