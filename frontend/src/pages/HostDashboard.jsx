@@ -15,6 +15,14 @@ export default function HostDashboard() {
   const game = useGame();
   useGameEvents();
   const [ngrokUrl, setNgrokUrl] = useState('');
+
+  // Auto-détecter l'URL publique (cloudflare tunnel)
+  useEffect(() => {
+    const currentHost = window.location.host;
+    if (currentHost !== `localhost:3001` && currentHost !== `127.0.0.1:3001`) {
+      setNgrokUrl(`https://${currentHost}`);
+    }
+  }, []);
   const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [spotifyLoading, setSpotifyLoading] = useState(false);
   const [spotifyError, setSpotifyError] = useState('');

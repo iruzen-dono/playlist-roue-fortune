@@ -22,16 +22,6 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// En production, servir le frontend build
-if (config.nodeEnv === 'production') {
-  app.use(express.static('public'));
-  // SPA fallback
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return;
-    res.sendFile('public/index.html', { root: '.' });
-  });
-}
-
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
@@ -84,6 +74,15 @@ app.get('/api/session/:sessionId', (req, res) => {
   // On expose via un import direct
   res.json({ note: 'See websocket events for live session data' });
 });
+
+// En production, servir le frontend build (APRÈS toutes les routes API)
+if (config.nodeEnv === 'production') {
+  app.use(express.static('public'));
+  app.get('/{*path}', (req, res) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return;
+    res.sendFile('public/index.html', { root: '.' });
+  });
+}
 
 // Init Supabase (peut être null si pas configuré)
 initSupabase(config.supabase.url, config.supabase.anonKey);
