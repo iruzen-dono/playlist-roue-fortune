@@ -4,6 +4,7 @@ import { generateInitialPlaylist, generateQuizTrack } from '../services/llmServi
 import { searchTracks, resolveTracks } from '../services/spotifyService.js';
 import { saveGuest } from '../services/supabaseService.js';
 import { playTrack, pausePlayback, skipToNext, setDeviceId, getValidAccessToken } from '../services/spotifyOAuth.js';
+import { saveGuestsToFile, loadGuestsFromFile } from '../services/localDb.js';
 
 // Map sessionId → GameState
 const sessions = new Map();
@@ -25,9 +26,32 @@ export function setupSocketHandlers(io) {
     // ─── HOST ACTIONS ──────────────────────────────────────────
 
     // Rejoindre une session existante (après refresh de la page host)
-    socket.on('host:rejoin-session', ({ sessionId }, callback) => {
-      const game = sessions.get(sessionId);
-      if (!game) return callback?.({ error: 'Session not found', sessionId });
+    socket.on('host:rejoin-session', async ({ sessionId }, callback) => {
+      let game = sessions.get(sessionId);
+      
+      // Si la session n'existe plus en mémoire, tenter de la restaurer depuis le stockage local
+      if (!game) {
+        console.log(`[Host] Session ${sessionId} not in memory, attempting restore from localDb...`);
+        const storedGuests = loadGuestsFromFile(sessionId);
+        if (storedGuests && storedGuests.length > 0) {
+          const { GameState } = await import('../services/gameState.js');
+          game = new GameState(sessionId);
+          for (const g of storedGuests) {
+            game.guests.set(g.username, {
+              username: g.username,
+              points: g.points || 0,
+              likedGenres: g.likedGenres || [],
+              hatedGenres: g.hatedGenres || [],
+              favoriteArtists: g.favoriteArtists || [],
+            });
+          }
+          sessions.set(sessionId, game);
+          console.log(`[Host] Session ${sessionId} restored from localDb with ${game.guests.size} guests`);
+        } else {
+          console.log(`[Host] Session ${sessionId} not found in localDb`);
+          return callback?.({ error: 'Session not found', sessionId });
+        }
+      }
 
       socket.join(`session:${sessionId}`);
       socket.join(`host:${sessionId}`);
@@ -217,6 +241,9 @@ export function setupSocketHandlers(io) {
       guestData.likedGenres = likedGenres || [];
       guestData.hatedGenres = hatedGenres || [];
       guestData.favoriteArtists = favoriteArtists || [];
+
+      // Persistance locale (fallback quand Supabase absent)
+      saveGuestsToFile(sessionId, game.guests);
 
       callback?.({ ok: true, session: game.toJSON() });
       io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
