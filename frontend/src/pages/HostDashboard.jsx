@@ -88,9 +88,17 @@ export default function HostDashboard() {
     // CRITIQUE : définir le callback AVANT de charger le script,
     // sinon le SDK l'appelle avant qu'il ne soit défini
     window.onSpotifyWebPlaybackSDKReady = () => {
+      let timedOut = false;
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        setSpotifyError('Délai dépassé — vérifie que Spotify est ouvert et que tu es Premium');
+        setSpotifyLoading(false);
+      }, 15000);
+
       const player = new window.Spotify.Player({
         name: `Roue de la Fortune — ${sessionId}`,
         getOAuthToken: async (cb) => {
+          if (timedOut) { cb(''); return; }
           try {
             const res = await fetch('/api/spotify/token', {
               method: 'POST',
@@ -98,10 +106,17 @@ export default function HostDashboard() {
               body: JSON.stringify({ sessionId }),
             });
             const data = await res.json();
+            if (!data.access_token) {
+              console.error('[Spotify] Token error:', data.error);
+              setSpotifyError(`Erreur Spotify: ${data.error || 'token invalide'}`);
+              setSpotifyLoading(false);
+              return;
+            }
             cb(data.access_token);
           } catch (err) {
             console.error('[Spotify] Token fetch failed:', err);
-            setSpotifyError('Erreur de connexion Spotify');
+            setSpotifyError('Erreur de connexion Spotify — vérifie le tunnel');
+            setSpotifyLoading(false);
           }
         },
         volume: 0.8,
@@ -109,28 +124,33 @@ export default function HostDashboard() {
 
       player.addListener('ready', ({ device_id }) => {
         console.log('[Spotify] Player ready:', device_id);
+        clearTimeout(timeout);
         socket?.emit('host:spotify-device', { deviceId: device_id });
       });
 
       player.addListener('not_ready', ({ device_id }) => {
         console.log('[Spotify] Player not ready:', device_id);
+        clearTimeout(timeout);
         setSpotifyConnected(false);
       });
 
       player.addListener('initialization_error', ({ message }) => {
         console.error('[Spotify] Init error:', message);
+        clearTimeout(timeout);
         setSpotifyError(message);
         setSpotifyLoading(false);
       });
 
       player.addListener('authentication_error', ({ message }) => {
         console.error('[Spotify] Auth error:', message);
+        clearTimeout(timeout);
         setSpotifyError('Authentification Spotify échouée. Reconnectez-vous.');
         setSpotifyConnected(false);
         setSpotifyLoading(false);
       });
 
       player.connect().then(success => {
+        clearTimeout(timeout);
         if (!success) {
           setSpotifyError('Impossible de connecter le player Spotify');
           setSpotifyLoading(false);
