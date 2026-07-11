@@ -5,4 +5,5 @@ dist/
 *.local
 .DS_Store
 *.log
-ngrok.ymlbackend/public/
+ngrok.yml
+backend/public/
