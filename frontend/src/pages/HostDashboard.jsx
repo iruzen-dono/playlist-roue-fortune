@@ -151,7 +151,7 @@ export default function HostDashboard() {
     window.location.href = `/api/spotify/login?session=${sessionId}`;
   };
 
-  const joinUrl = ngrokUrl || `${window.location.origin}/join?session=${sessionId}`;
+  const joinUrl = `${ngrokUrl || window.location.origin}/join/${sessionId}`;
 
   return (
     <div className="page">

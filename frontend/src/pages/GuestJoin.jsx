@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
 import { useNavigate } from 'react-router-dom';
@@ -9,10 +10,8 @@ export default function GuestJoin() {
   const { socket } = useSocket();
   const game = useGame();
   const navigate = useNavigate();
-  const searchParams = new URLSearchParams(window.location.search);
-  const sessionFromUrl = searchParams.get('session') || '';
-
-  const [sessionId, setSessionId] = useState(sessionFromUrl);
+  const { code } = useParams();
+  const [sessionId, setSessionId] = useState(code || '');
   const [username, setUsername] = useState('');
   const [step, setStep] = useState(1);
   const [likedGenres, setLikedGenres] = useState([]);
