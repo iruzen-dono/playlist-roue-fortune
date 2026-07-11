@@ -75,6 +75,11 @@ app.get('/api/session/:sessionId', (req, res) => {
   res.json({ note: 'See websocket events for live session data' });
 });
 
+// URL publique pour le QR code (mettre PUBLIC_URL dans l'env du serveur)
+app.get('/api/config/url', (req, res) => {
+  res.json({ publicUrl: process.env.PUBLIC_URL || null });
+});
+
 // En production, servir le frontend build (APRÈS toutes les routes API)
 if (config.nodeEnv === 'production') {
   app.use(express.static('public'));

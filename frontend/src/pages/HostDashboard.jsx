@@ -16,11 +16,18 @@ export default function HostDashboard() {
   useGameEvents();
   const [ngrokUrl, setNgrokUrl] = useState('');
 
-  // Auto-détecter l'URL publique (cloudflare tunnel)
+  // Auto-détecter l'URL publique (cloudflare tunnel ou hébergement)
   useEffect(() => {
     const currentHost = window.location.host;
-    if (currentHost !== `localhost:3001` && currentHost !== `127.0.0.1:3001`) {
+    const isLocal = currentHost === 'localhost:3001' || currentHost === '127.0.0.1:3001';
+    if (!isLocal) {
       setNgrokUrl(`https://${currentHost}`);
+    } else {
+      // Depuis localhost, récupérer l'URL publique depuis le backend
+      fetch('/api/config/url')
+        .then(r => r.json())
+        .then(d => { if (d.publicUrl) setNgrokUrl(d.publicUrl); })
+        .catch(() => {});
     }
   }, []);
   const [spotifyConnected, setSpotifyConnected] = useState(false);
