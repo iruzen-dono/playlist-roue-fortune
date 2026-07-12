@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import os from 'os';
 import { config } from './config/index.js';
 import { initSupabase } from './services/supabaseService.js';
 import { setupSocketHandlers } from './services/socketHandler.js';
@@ -78,6 +79,40 @@ app.get('/api/session/:sessionId', (req, res) => {
 // URL publique pour le QR code (mettre PUBLIC_URL dans l'env du serveur)
 app.get('/api/config/url', (req, res) => {
   res.json({ publicUrl: process.env.PUBLIC_URL || null });
+});
+
+// IP locale pour le QR code sur le même réseau WiFi
+app.get('/api/config/local-ip', (req, res) => {
+  try {
+    const interfaces = os.networkInterfaces();
+    let localIp = '127.0.0.1';
+    // Prioriser l'IP du réseau local (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    for (const name of Object.keys(interfaces)) {
+      if (name.startsWith('vEthernet') || name.startsWith('Loopback') || name === 'lo') continue;
+      const addrs = interfaces[name].filter(a => a.family === 'IPv4' && !a.internal);
+      for (const addr of addrs) {
+        const ip = addr.address;
+        // Vérifier si c'est une IP privée standard (pas Tailscale/CGNAT)
+        if (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.match(/^172\.(1[6-9]|2\d|3[01])\./)) {
+          localIp = ip;
+          break;
+        }
+      }
+      if (localIp !== '127.0.0.1') break;
+    }
+    // Fallback: première IP non locale trouvée
+    if (localIp === '127.0.0.1') {
+      for (const name of Object.keys(interfaces)) {
+        if (name.startsWith('vEthernet') || name.startsWith('Loopback') || name === 'lo') continue;
+        const addrs = interfaces[name].filter(a => a.family === 'IPv4' && !a.internal);
+        if (addrs.length > 0) { localIp = addrs[0].address; break; }
+      }
+    }
+    res.json({ localIp, port: config.serverPort || 3001 });
+  } catch (err) {
+    console.error('[local-ip] Error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // En production, servir le frontend build (APRÈS toutes les routes API)

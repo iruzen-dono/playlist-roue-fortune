@@ -15,8 +15,9 @@ export default function HostDashboard() {
   const game = useGame();
   useGameEvents();
   const [ngrokUrl, setNgrokUrl] = useState('');
+  const [localIp, setLocalIp] = useState('');
 
-  // Auto-détecter l'URL publique (cloudflare tunnel ou hébergement)
+  // Auto-détecter les URLs (tunnel + IP locale)
   useEffect(() => {
     const currentHost = window.location.host;
     const isLocal = currentHost === 'localhost:3001' || currentHost === '127.0.0.1:3001';
@@ -29,6 +30,11 @@ export default function HostDashboard() {
         .then(d => { if (d.publicUrl) setNgrokUrl(d.publicUrl); })
         .catch(() => {});
     }
+    // Récupérer l'IP locale pour les invités sur le même WiFi
+    fetch('/api/config/local-ip')
+      .then(r => r.json())
+      .then(d => { if (d.localIp) setLocalIp(`http://${d.localIp}:${d.port}`); })
+      .catch(() => {});
   }, []);
   const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [spotifyLoading, setSpotifyLoading] = useState(false);
@@ -125,7 +131,9 @@ export default function HostDashboard() {
       player.addListener('ready', ({ device_id }) => {
         console.log('[Spotify] Player ready:', device_id);
         clearTimeout(timeout);
-        socket?.emit('host:spotify-device', { deviceId: device_id });
+        setSpotifyConnected(true);
+        setSpotifyLoading(false);
+        socket?.emit('host:spotify-device', { deviceId: device_id, sessionId });
       });
 
       player.addListener('not_ready', ({ device_id }) => {
@@ -170,7 +178,7 @@ export default function HostDashboard() {
   };
 
   const startEvening = () => {
-    socket.emit('host:start-evening', null, (res) => {
+    socket.emit('host:start-evening', { sessionId }, (res) => {
       if (res.error) alert(res.error);
     });
   };
@@ -188,6 +196,7 @@ export default function HostDashboard() {
   };
 
   const joinUrl = `${ngrokUrl || window.location.origin}/join/${sessionId}`;
+  const localUrl = localIp ? `${localIp}/join/${sessionId}` : null;
 
   return (
     <div className="page">
@@ -232,7 +241,8 @@ export default function HostDashboard() {
             <div className="qr-wrapper">
               <QRCodeComponent value={joinUrl} size={180} />
             </div>
-            <div className="input-readonly">{joinUrl}</div>
+            <div className="input-readonly">Tunnel : {joinUrl}</div>
+            {localUrl && <div className="input-readonly" style={{ marginTop: 4, color: 'var(--green)' }}>📡 Local : {localUrl}</div>}
           </div>
 
           {/* Participants */}

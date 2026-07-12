@@ -56,6 +56,7 @@ export function setupSocketHandlers(io) {
       socket.join(`session:${sessionId}`);
       socket.join(`host:${sessionId}`);
       console.log(`[Host] Rejoined ${sessionId}, room has ${io.sockets.adapter.rooms.get(`session:${sessionId}`)?.size} sockets`);
+      currentSession = sessionId;
 
       callback?.({ ok: true, session: game.toJSON() });
     });
@@ -75,8 +76,9 @@ export function setupSocketHandlers(io) {
     });
 
     // Démarrage de la soirée → génération playlist + premier blind-test
-    socket.on('host:start-evening', async (_, callback) => {
-      const game = sessions.get(currentSession);
+    socket.on('host:start-evening', async ({ sessionId: payloadSessionId } = {}, callback) => {
+      const sessionId = payloadSessionId || currentSession;
+      const game = sessions.get(sessionId);
       if (!game || game.guestCount() === 0) {
         return callback?.({ error: 'Aucun invité dans la session' });
       }
@@ -115,8 +117,8 @@ export function setupSocketHandlers(io) {
         game.quizAnswer = { title: resolvedQuiz[0].title, artist: resolvedQuiz[0].artist };
         game.currentTrack = resolvedQuiz[0];
 
-        io.to(`session:${currentSession}`).emit('game:state-update', game.toJSON());
-        io.to(`session:${currentSession}`).emit('quiz:start', {
+        io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
+        io.to(`session:${sessionId}`).emit('quiz:start', {
           round: 1,
           timer: config.game.quizTimer,
         });
@@ -170,11 +172,11 @@ export function setupSocketHandlers(io) {
 
     // ─── SPOTIFY PLAYBACK ──────────────────────────────────────
 
-    socket.on('host:spotify-device', ({ deviceId }) => {
-      if (!currentSession) return;
-      setDeviceId(currentSession, deviceId);
-      console.log(`[Spotify] Device registered for ${currentSession}: ${deviceId}`);
-      io.to(`host:${currentSession}`).emit('spotify:device-ready');
+    socket.on('host:spotify-device', ({ deviceId, sessionId }) => {
+      if (!sessionId) return;
+      setDeviceId(sessionId, deviceId);
+      console.log(`[Spotify] Device registered for ${sessionId}: ${deviceId}`);
+      io.to(`host:${sessionId}`).emit('spotify:device-ready');
     });
 
     socket.on('host:play-track', async ({ trackUri, positionMs = 0 }, callback) => {

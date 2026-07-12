@@ -17,9 +17,14 @@ export const config = {
   },
 
   llm: {
+    provider: process.env.LLM_PROVIDER || 'openai',
     apiKey: process.env.LLM_API_KEY,
     endpoint: process.env.LLM_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions',
     model: process.env.LLM_MODEL || 'mixtral-8x7b-32768',
+    // Cloudflare Workers AI (fallback si provider=cloudflare)
+    cfAccountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+    cfApiToken: process.env.CLOUDFLARE_API_TOKEN,
+    cfModel: process.env.CF_LLM_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
   },
 
   session: {

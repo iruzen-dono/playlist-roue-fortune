@@ -1,5 +1,5 @@
 // Service LLM — génération de playlist + transitions musicales
-// Groq (ou Ollama) pour analyse des préférences et propositions
+// OpenAI-compatible (Groq, etc.) ou Cloudflare Workers AI
 
 const LLM_SYSTEM_PROMPT = `Tu es un DJ IA expert en transitions musicales et compromis collectifs.
 Tu reçois les préférences musicales textuelles d'un groupe d'invités.
@@ -9,19 +9,23 @@ Ta mission : générer des morceaux de compromis qui :
 3. Surprennent agréablement — pas de hits overplayed
 4. Sont disponibles sur Spotify (titres et artistes réels)
 
-Réponds UNIQUEMENT avec un tableau JSON valide, rien d'autre.`;
+Règles STRICTES de format :
+- Les clés DOIVENT être entre guillemets doubles : "title", "artist", "reason"
+- Les chaînes DOIVENT être entre guillemets doubles : "Titre de la chanson"
+- Tableau JSON valide UNIQUEMENT, rien d'autre
+- Exemple : [{"title":"Smells Like Teen Spirit","artist":"Nirvana","reason":"..."}]`;
 
 function buildUserPrompt(preferences) {
   const summary = preferences.map((p, i) =>
-    `Invitée ${i + 1} (${p.username}) :\n  - Genres aimés : ${p.likedGenres.join(', ')}\n` +
-    `  - Genres détestés : ${p.hatedGenres.join(', ')}\n  - Artistes favoris : ${p.favoriteArtists.join(', ')}`
-  ).join('\n\n');
+    `Invitée ${i + 1} (${p.username}) :\n  - Genres aimés : ${p.likedGenres.join(', ')}\\n` +
+    `  - Genres détestés : ${p.hatedGenres.join(', ')}\\n  - Artistes favoris : ${p.favoriteArtists.join(', ')}`
+  ).join('\\n\\n');
 
   return `Voici les préférences du groupe d'invités pour une soirée de jeu musicale :
 
 ${summary}
 
-Génère exactement 20 morceaux de compromis qui plairont au groupe.
+Génère exactement 10 morceaux de compromis qui plairont au groupe.
 Format JSON attendu :
 [
   {
@@ -32,65 +36,102 @@ Format JSON attendu :
 ]`;
 }
 
-export async function generateInitialPlaylist(guestPreferences, llmConfig) {
-  const { apiKey, endpoint, model } = llmConfig;
-
-  const response = await fetch(endpoint, {
+async function callCFLLM(messages, llmConfig) {
+  const url = `https://api.cloudflare.com/client/v4/accounts/${llmConfig.cfAccountId}/ai/run/${llmConfig.cfModel}`;
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${llmConfig.cfApiToken}`,
     },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: LLM_SYSTEM_PROMPT },
-        { role: 'user', content: buildUserPrompt(guestPreferences) },
-      ],
-      temperature: 0.8,
-      response_format: { type: 'json_object' },
-    }),
+    body: JSON.stringify({ messages, max_tokens: 2048 }),
   });
 
   if (!response.ok) {
-    throw new Error(`LLM request failed: ${response.status} ${response.statusText}`);
+    const text = await response.text();
+    throw new Error(`CF LLM request failed: ${response.status} ${text}`);
   }
 
   const data = await response.json();
+  if (!data.success) throw new Error(`CF LLM error: ${data.errors?.[0]?.message || 'unknown'}`);
+  return data.result.response;
+}
+
+async function callOpenAILLM(messages, llmConfig, opts = {}) {
+  const body = {
+    model: llmConfig.model,
+    messages,
+    temperature: opts.temperature || 0.8,
+  };
+  if (opts.responseFormat) body.response_format = { type: 'json_object' };
+
+  const response = await fetch(llmConfig.endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${llmConfig.apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error(`LLM request failed: ${response.status} ${response.statusText}`);
+  const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
-
   if (!content) throw new Error('Empty LLM response');
+  return content;
+}
 
-  // Nettoyer et parser
+async function callLLM(messages, llmConfig, opts = {}) {
+  if (llmConfig.provider === 'cloudflare') {
+    return callCFLLM(messages, llmConfig);
+  }
+  return callOpenAILLM(messages, llmConfig, opts);
+}
+
+export async function generateInitialPlaylist(guestPreferences, llmConfig) {
+  const messages = [
+    { role: 'system', content: LLM_SYSTEM_PROMPT },
+    { role: 'user', content: buildUserPrompt(guestPreferences) },
+  ];
+
+  const content = await callLLM(messages, llmConfig, { temperature: 0.8, responseFormat: true });
+
+  // Nettoyer et parser (CF Workers AI peut retourner du JS non strict ou un objet déjà parsé)
+  if (typeof content === 'object') return content;
+  
   const cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Fallback: parser comme JS object literal (accepte '..."...', clés nues, trailing commas)
+    try {
+      return new Function('return (' + cleaned + ')')();
+    } catch {
+      // Dernière chance: remplacer les ' → " uniquement pour les délimiteurs de chaînes
+      const fixed = cleaned
+        .replace(/([{,]\s*)(\w[\w$]*)(\s*:)/g, '$1"$2"$3')
+        .replace(/,\s*([}\]])/g, '$1')
+        .replace(/\n\s*/g, ' ')
+        .replace(/\s+/g, ' ');
+      return JSON.parse(fixed);
+    }
+  }
 }
 
 // Génération d'un blind-test round (un seul morceau surprise adapté au groupe)
 export async function generateQuizTrack(guestPreferences, llmConfig) {
-  const { apiKey, endpoint, model } = llmConfig;
   const summary = guestPreferences.map(p => `${p.username}: ${p.favoriteArtists.slice(0, 2).join(', ')}`).join('; ');
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: 'Tu es un expert musical. Propose UN morceau surprenant et moins connu que le groupe doit deviner. Format JSON : {"title": "...", "artist": "..."}. UNIQUEMENT le JSON.' },
-        { role: 'user', content: `Groupe : ${summary}` },
-      ],
-      temperature: 0.9,
-      response_format: { type: 'json_object' },
-    }),
-  });
+  const messages = [
+    { role: 'system', content: 'Tu es un expert musical. Propose UN morceau surprenant. Format JSON STRICT avec guillemets doubles : {"title":"...","artist":"..."}. UNIQUEMENT le JSON valide, rien d\'autre.' },
+    { role: 'user', content: `Groupe : ${summary}` },
+  ];
 
-  if (!response.ok) throw new Error(`LLM quiz request failed: ${response.status}`);
+  const content = await callLLM(messages, llmConfig, { temperature: 0.9, responseFormat: true });
 
-  const data = await response.json();
-  const cleaned = data.choices[0].message.content.replace(/```json?/g, '').replace(/```/g, '').trim();
+  // CF Workers AI retourne parfois déjà parsé
+  if (typeof content === 'object') return content;
+
+  const cleaned = content.replace(/```json?/g, '').replace(/```/g, '').trim();
   return JSON.parse(cleaned);
 }
