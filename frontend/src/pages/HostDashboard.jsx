@@ -12,6 +12,8 @@ const SPOTIFY_SDK_URL = 'https://sdk.scdn.co/spotify-player.js';
 export default function HostDashboard() {
   const { sessionId } = useParams();
   const { socket } = useSocket();
+  const socketRef = useRef(socket);
+  socketRef.current = socket;
   const game = useGame();
   useGameEvents();
   const [ngrokUrl, setNgrokUrl] = useState('');
@@ -131,9 +133,8 @@ export default function HostDashboard() {
       player.addListener('ready', ({ device_id }) => {
         console.log('[Spotify] Player ready:', device_id);
         clearTimeout(timeout);
-        setSpotifyConnected(true);
         setSpotifyLoading(false);
-        socket?.emit('host:spotify-device', { deviceId: device_id, sessionId });
+        socketRef.current?.emit('host:spotify-device', { deviceId: device_id, sessionId });
       });
 
       player.addListener('not_ready', ({ device_id }) => {
@@ -155,6 +156,11 @@ export default function HostDashboard() {
         setSpotifyError('Authentification Spotify échouée. Reconnectez-vous.');
         setSpotifyConnected(false);
         setSpotifyLoading(false);
+      });
+
+      player.addListener('autoplay_failed', () => {
+        console.warn('[Spotify] Autoplay bloqué par le navigateur');
+        setSpotifyError('Le navigateur bloque le son — clique à nouveau sur "Lancer la soirée".');
       });
 
       player.connect().then(success => {
