@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
@@ -109,13 +109,16 @@ function QuizCard({ round, timer, onSubmit }) {
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(timer);
 
-  useState(() => {
+  useEffect(() => {
+    setTimeLeft(timer);
+    setSubmitted(false);
+    setAnswer('');
     if (timer <= 0) return;
     const interval = setInterval(() => {
       setTimeLeft(prev => prev <= 1 ? (clearInterval(interval), 0) : prev - 1);
     }, 1000);
     return () => clearInterval(interval);
-  });
+  }, [round, timer]);
 
   const handleSubmit = () => {
     if (!answer.trim() || submitted) return;

@@ -178,6 +178,11 @@ export default function HostDashboard() {
   };
 
   const startEvening = () => {
+    // Débloque la lecture audio (politique autoplay des navigateurs) :
+    // le SDK a besoin d'un vrai clic pour "activer" l'élément audio interne,
+    // sinon Spotify joue "dans le vide" côté navigateur.
+    playerRef.current?.activateElement?.();
+
     socket.emit('host:start-evening', { sessionId }, (res) => {
       if (res.error) alert(res.error);
     });
