@@ -125,6 +125,31 @@ Supabase est optionnel — sans credentials, le fallback local est utilisé.
 - **Solution :** Tailscale Funnel remplace cloudflared
 - **URL :** `https://the-chosen-1ne-1.taile64e86.ts.net` (permanente)
 
+### Spotify freeze après connexion OAuth
+- **Symptôme :** "Connexion en cours..." ne se termine jamais après redirect OAuth
+- **Cause :** `host:spotify-device` utilisait `currentSession` (null sur nouvelle socket)
+- **Solution :** Passer `sessionId` dans le payload + set states directement dans le callback `ready`
+
+### Aucun invité au démarrage
+- **Symptôme :** "Personne dans la session" malgré des invités connectés
+- **Cause :** `host:start-evening` envoyait `null` comme payload
+- **Solution :** Envoyer `sessionId` dans le payload, backend lookup par sessionId
+
+### Pas de son au démarrage
+- **Symptôme :** LLM génère la playlist, QR s'affiche, mais aucun son joué
+- **Cause :** `playTrack()` jamais appelé dans `host:start-evening`
+- **Solution :** Appeler `playTrack()` après résolution du quiz track
+
+### LLM indisponible (rate limit / erreur Cloudflare)
+- **Symptôme :** "Erreur LLM" ou JSON invalide
+- **Cause :** CF Workers AI free tier limité, ou réponse non-JSON
+- **Solution :** Fallback playlist statique (10 classiques) + retry + parseur robuste
+
+### Spotify 429 rate limit sur les recherches
+- **Symptôme :** "search error: 429" en boucle, tracks sans URI Spotify
+- **Cause :** Trop d'appels API Spotify (limit ~10 req/s)
+- **Solution :** Retry 1s après 429 + délai 100ms entre requêtes + filtre tracks résolues
+
 ## Variables d'environnement
 
 | Variable | Description | Requis |
@@ -134,5 +159,8 @@ Supabase est optionnel — sans credentials, le fallback local est utilisé.
 | `SPOTIFY_REDIRECT_URI` | URL callback OAuth | Oui |
 | `PUBLIC_URL` | URL publique QR code | Oui |
 | `HOST_PASSWORD` | Mot de passe hôte | Non (défaut: admin123) |
-| `SUPABASE_URL` | URL Supabase | Non (fallback local) |
-| `SUPABASE_ANON_KEY` | Clé anonyme Supabase | Non |
+| `LLM_PROVIDER` | Provider IA : `cloudflare` ou `openai` | Non (fallback playlist statique) |
+| `CF_ACCOUNT_ID` | Account ID Cloudflare Workers AI | Non |
+| `CF_API_TOKEN` | API Token Cloudflare Workers AI | Non |
+| `CF_LLM_MODEL` | Modèle CF (défaut: `@cf/meta/llama-3.3-70b-instruct-fp8-fast`) | Non |
+| `OPENAI_API_KEY` | Clé OpenAI (si LLM_PROVIDER=openai) | Non |
