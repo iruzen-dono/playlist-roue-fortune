@@ -117,6 +117,14 @@ export function setupSocketHandlers(io) {
         game.quizAnswer = { title: resolvedQuiz[0].title, artist: resolvedQuiz[0].artist };
         game.currentTrack = resolvedQuiz[0];
 
+        // 6. Jouer le premier son sur Spotify
+        try {
+          await playTrack(sessionId, resolvedQuiz[0].trackUri);
+        } catch (playErr) {
+          console.error('[Start evening] Playback error:', playErr.message);
+          // Non bloquant — on continue même si la lecture plante
+        }
+
         io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
         io.to(`session:${sessionId}`).emit('quiz:start', {
           round: 1,
