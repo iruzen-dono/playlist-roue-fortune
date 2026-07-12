@@ -91,7 +91,12 @@ export async function getValidAccessToken(sessionId) {
 
 // Contrôle playback via l'API Spotify Connect
 export async function playTrack(sessionId, trackUri, positionMs = 0) {
-  const tokens = hostTokens.get(sessionId);
+  // Attendre que le device soit enregistré (max 5s)
+  let tokens = hostTokens.get(sessionId);
+  for (let i = 0; i < 10 && !tokens?.deviceId; i++) {
+    await new Promise(r => setTimeout(r, 500));
+    tokens = hostTokens.get(sessionId);
+  }
   if (!tokens?.deviceId) throw new Error('No Spotify device connected');
 
   const token = await getValidAccessToken(sessionId);

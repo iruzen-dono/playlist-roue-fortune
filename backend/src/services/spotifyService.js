@@ -33,7 +33,7 @@ async function ensureToken() {
 }
 
 // Recherche de morceaux par titre + artiste
-export async function searchTrack(query) {
+async function searchTrack(query) {
   const tk = await ensureToken();
   if (!tk) return null;
 
@@ -42,8 +42,20 @@ export async function searchTrack(query) {
     { headers: { 'Authorization': `Bearer ${tk}` } }
   );
 
+  if (response.status === 429) {
+    console.warn('[Spotify] search error: 429, retrying in 1s...');
+    await new Promise(r => setTimeout(r, 1000));
+    const retry = await fetch(
+      `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`,
+      { headers: { 'Authorization': `Bearer ${tk}` } }
+    );
+    if (!retry.ok) return null;
+    const data = await retry.json();
+    return data.tracks?.items?.[0] || null;
+  }
+
   if (!response.ok) {
-    console.error('[Spotify] search error:', response.status);
+    console.warn(`[Spotify] search error: ${response.status}`);
     return null;
   }
 

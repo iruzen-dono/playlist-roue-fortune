@@ -15,11 +15,27 @@ Règles STRICTES de format :
 - Tableau JSON valide UNIQUEMENT, rien d'autre
 - Exemple : [{"title":"Smells Like Teen Spirit","artist":"Nirvana","reason":"..."}]`;
 
+// Playlist de fallback si le LLM est indisponible
+const FALLBACK_PLAYLIST = [
+  { title: 'Blinding Lights', artist: 'The Weeknd', reason: 'Tube planétaire' },
+  { title: 'Bohemian Rhapsody', artist: 'Queen', reason: 'Classique intemporel' },
+  { title: 'Smells Like Teen Spirit', artist: 'Nirvana', reason: 'Hymne grunge' },
+  { title: 'Billie Jean', artist: 'Michael Jackson', reason: 'Iconique' },
+  { title: 'Hotel California', artist: 'Eagles', reason: 'Rock légendaire' },
+  { title: 'Lose Yourself', artist: 'Eminem', reason: 'Hymne hip-hop' },
+  { title: 'Rolling in the Deep', artist: 'Adele', reason: 'Soul puissante' },
+  { title: 'Stairway to Heaven', artist: 'Led Zeppelin', reason: "Chef-d'oeuvre rock" },
+  { title: 'Uptown Funk', artist: 'Mark Ronson ft. Bruno Mars', reason: 'Funk irrésistible' },
+  { title: 'Take On Me', artist: 'a-ha', reason: 'Synth-pop culte' },
+];
+
+const FALLBACK_QUIZ = { title: 'Smells Like Teen Spirit', artist: 'Nirvana' };
+
 function buildUserPrompt(preferences) {
   const summary = preferences.map((p, i) =>
-    `Invitée ${i + 1} (${p.username}) :\n  - Genres aimés : ${p.likedGenres.join(', ')}\\n` +
-    `  - Genres détestés : ${p.hatedGenres.join(', ')}\\n  - Artistes favoris : ${p.favoriteArtists.join(', ')}`
-  ).join('\\n\\n');
+    `Invitée ${i + 1} (${p.username}) :\n  - Genres aimés : ${p.likedGenres.join(', ')}\n` +
+    `  - Genres détestés : ${p.hatedGenres.join(', ')}\n  - Artistes favoris : ${p.favoriteArtists.join(', ')}`
+  ).join('\n\n');
 
   return `Voici les préférences du groupe d'invités pour une soirée de jeu musicale :
 
@@ -89,49 +105,56 @@ async function callLLM(messages, llmConfig, opts = {}) {
 }
 
 export async function generateInitialPlaylist(guestPreferences, llmConfig) {
-  const messages = [
-    { role: 'system', content: LLM_SYSTEM_PROMPT },
-    { role: 'user', content: buildUserPrompt(guestPreferences) },
-  ];
-
-  const content = await callLLM(messages, llmConfig, { temperature: 0.8, responseFormat: true });
-
-  // Nettoyer et parser (CF Workers AI peut retourner du JS non strict ou un objet déjà parsé)
-  if (typeof content === 'object') return content;
-  
-  const cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();
   try {
-    return JSON.parse(cleaned);
-  } catch {
-    // Fallback: parser comme JS object literal (accepte '..."...', clés nues, trailing commas)
+    const messages = [
+      { role: 'system', content: LLM_SYSTEM_PROMPT },
+      { role: 'user', content: buildUserPrompt(guestPreferences) },
+    ];
+
+    const content = await callLLM(messages, llmConfig, { temperature: 0.8, responseFormat: true });
+
+    // Nettoyer et parser (CF Workers AI peut retourner du JS non strict ou un objet déjà parsé)
+    if (typeof content === 'object') return content;
+
+    const cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();
     try {
-      return new Function('return (' + cleaned + ')')();
+      return JSON.parse(cleaned);
     } catch {
-      // Dernière chance: remplacer les ' → " uniquement pour les délimiteurs de chaînes
-      const fixed = cleaned
-        .replace(/([{,]\s*)(\w[\w$]*)(\s*:)/g, '$1"$2"$3')
-        .replace(/,\s*([}\]])/g, '$1')
-        .replace(/\n\s*/g, ' ')
-        .replace(/\s+/g, ' ');
-      return JSON.parse(fixed);
+      try {
+        return new Function('return (' + cleaned + ')')();
+      } catch {
+        const fixed = cleaned
+          .replace(/([{,]\s*)(\w[\w$]*)(\s*:)/g, '$1"$2"$3')
+          .replace(/,\s*([}\]])/g, '$1')
+          .replace(/\n\s*/g, ' ')
+          .replace(/\s+/g, ' ');
+        return JSON.parse(fixed);
+      }
     }
+  } catch (err) {
+    console.error('[LLM] generateInitialPlaylist failed, using fallback:', err.message);
+    return [...FALLBACK_PLAYLIST];
   }
 }
 
 // Génération d'un blind-test round (un seul morceau surprise adapté au groupe)
 export async function generateQuizTrack(guestPreferences, llmConfig) {
-  const summary = guestPreferences.map(p => `${p.username}: ${p.favoriteArtists.slice(0, 2).join(', ')}`).join('; ');
+  try {
+    const summary = guestPreferences.map(p => `${p.username}: ${p.favoriteArtists.slice(0, 2).join(', ')}`).join('; ');
+    const messages = [
+      { role: 'system', content: 'Tu es un expert musical. Propose UN morceau surprenant. Format JSON STRICT avec guillemets doubles : {"title":"...","artist":"..."}. UNIQUEMENT le JSON valide, rien d\'autre.' },
+      { role: 'user', content: `Groupe : ${summary}` },
+    ];
 
-  const messages = [
-    { role: 'system', content: 'Tu es un expert musical. Propose UN morceau surprenant. Format JSON STRICT avec guillemets doubles : {"title":"...","artist":"..."}. UNIQUEMENT le JSON valide, rien d\'autre.' },
-    { role: 'user', content: `Groupe : ${summary}` },
-  ];
+    const content = await callLLM(messages, llmConfig, { temperature: 0.9, responseFormat: true });
 
-  const content = await callLLM(messages, llmConfig, { temperature: 0.9, responseFormat: true });
+    // CF Workers AI retourne parfois déjà parsé
+    if (typeof content === 'object') return content;
 
-  // CF Workers AI retourne parfois déjà parsé
-  if (typeof content === 'object') return content;
-
-  const cleaned = content.replace(/```json?/g, '').replace(/```/g, '').trim();
-  return JSON.parse(cleaned);
+    const cleaned = content.replace(/```json?/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (err) {
+    console.error('[LLM] generateQuizTrack failed, using fallback:', err.message);
+    return { ...FALLBACK_QUIZ };
+  }
 }

@@ -96,11 +96,12 @@ export function setupSocketHandlers(io) {
         // 2. Résoudre les track_uri Spotify
         const resolved = await resolveTracks(llmTracks);
 
-        // 3. Ajouter à la queue
+        // 3. Ajouter à la queue (filtrer les tracks sans URI Spotify)
         for (const track of resolved) {
+          if (!track.trackUri) continue;
           game.queue.push({
             ...track,
-            trackUri: track.trackUri || null,
+            trackUri: track.trackUri,
             insertedBy: 'AI_Jukebox',
             boostScore: 0,
             skipVotesCount: 0,
@@ -117,12 +118,16 @@ export function setupSocketHandlers(io) {
         game.quizAnswer = { title: resolvedQuiz[0].title, artist: resolvedQuiz[0].artist };
         game.currentTrack = resolvedQuiz[0];
 
-        // 6. Jouer le premier son sur Spotify
-        try {
-          await playTrack(sessionId, resolvedQuiz[0].trackUri);
-        } catch (playErr) {
-          console.error('[Start evening] Playback error:', playErr.message);
-          // Non bloquant — on continue même si la lecture plante
+        // 6. Jouer sur Spotify (non-bloquant, avec fallback si pas de trackUri)
+        const firstTrack = resolvedQuiz[0].trackUri || game.queue[0]?.trackUri;
+        if (firstTrack) {
+          try {
+            await playTrack(sessionId, firstTrack);
+          } catch (playErr) {
+            console.error('[Start evening] Playback error:', playErr.message);
+          }
+        } else {
+          console.warn('[Start evening] No playable track URIs (Spotify rate limit?)');
         }
 
         io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
