@@ -29,7 +29,20 @@ const FALLBACK_PLAYLIST = [
   { title: 'Take On Me', artist: 'a-ha', reason: 'Synth-pop culte' },
 ];
 
-const FALLBACK_QUIZ = { title: 'Smells Like Teen Spirit', artist: 'Nirvana' };
+// Quiz fallbacks — rotation pour éviter la même chanson
+const FALLBACK_QUIZZES = [
+  { title: 'Smells Like Teen Spirit', artist: 'Nirvana' },
+  { title: 'Billie Jean', artist: 'Michael Jackson' },
+  { title: 'Bohemian Rhapsody', artist: 'Queen' },
+  { title: 'Lose Yourself', artist: 'Eminem' },
+  { title: 'Hotel California', artist: 'Eagles' },
+  { title: 'Rolling in the Deep', artist: 'Adele' },
+  { title: 'Take On Me', artist: 'a-ha' },
+  { title: 'Uptown Funk', artist: 'Mark Ronson ft. Bruno Mars' },
+  { title: 'Blinding Lights', artist: 'The Weeknd' },
+  { title: 'Stairway to Heaven', artist: 'Led Zeppelin' },
+];
+let fallbackQuizIndex = 0;
 
 function buildUserPrompt(preferences) {
   const summary = preferences.map((p, i) =>
@@ -134,12 +147,15 @@ export async function generateInitialPlaylist(guestPreferences, llmConfig) {
 }
 
 // Génération d'un blind-test round (un seul morceau surprise adapté au groupe)
-export async function generateQuizTrack(guestPreferences, llmConfig) {
+export async function generateQuizTrack(guestPreferences, llmConfig, alreadyPlayed = []) {
   try {
     const summary = guestPreferences.map(p => `${p.username}: ${p.favoriteArtists.slice(0, 2).join(', ')}`).join('; ');
+    const excludeHint = alreadyPlayed.length
+      ? `\nNe propose SURTOUT PAS ces morceaux déjà joués : ${alreadyPlayed.slice(-5).join(', ')}.`
+      : '';
     const messages = [
       { role: 'system', content: 'Tu es un expert musical. Propose UN morceau surprenant. Format JSON STRICT avec guillemets doubles : {"title":"...","artist":"..."}. UNIQUEMENT le JSON valide, rien d\'autre.' },
-      { role: 'user', content: `Groupe : ${summary}` },
+      { role: 'user', content: `Groupe : ${summary}${excludeHint}` },
     ];
 
     const content = await callLLM(messages, llmConfig, { temperature: 0.9, responseFormat: true });
@@ -151,6 +167,14 @@ export async function generateQuizTrack(guestPreferences, llmConfig) {
     return JSON.parse(cleaned);
   } catch (err) {
     console.error('[LLM] generateQuizTrack failed, using fallback:', err.message);
-    return { ...FALLBACK_QUIZ };
+    // Rotation dans les fallbacks, en sautant ceux déjà joués
+    for (let i = 0; i < FALLBACK_QUIZZES.length; i++) {
+      const candidate = FALLBACK_QUIZZES[fallbackQuizIndex % FALLBACK_QUIZZES.length];
+      fallbackQuizIndex++;
+      const label = `${candidate.title} - ${candidate.artist}`;
+      if (!alreadyPlayed.includes(label)) return { ...candidate };
+    }
+    // Si tous ont été joués, on reprend le cycle
+    return { ...FALLBACK_QUIZZES[(fallbackQuizIndex++) % FALLBACK_QUIZZES.length] };
   }
 }

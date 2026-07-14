@@ -6,8 +6,9 @@ import { saveGuest } from '../services/supabaseService.js';
 import { playTrack, pausePlayback, skipToNext, setDeviceId, getValidAccessToken } from '../services/spotifyOAuth.js';
 import { saveGuestsToFile, loadGuestsFromFile } from '../services/localDb.js';
 
-// Map sessionId → GameState
+//━━━ État global des parties ━━━
 const sessions = new Map();
+const playedQuizTracks = new Map(); // sessionId → [labels déjà joués]
 
 function getOrCreateSession(sessionId) {
   if (!sessions.has(sessionId)) {
@@ -111,22 +112,19 @@ export function setupSocketHandlers(io) {
         // 4. Démarrer en MODE_QUIZ (blind-test d'abord)
         game.setMode(MODE.QUIZ);
         game.quizRound = 1;
+        const playedKey = `session:${currentSession}`;
+        playedQuizTracks.set(currentSession, []);
 
         // 5. Générer le premier son à deviner
-        const quizTrack = await generateQuizTrack(guests, config.llm);
+        const quizTrack = await generateQuizTrack(guests, config.llm, []);
         const resolvedQuiz = await resolveTracks([quizTrack]);
+        const quizLabel = `${resolvedQuiz[0].title} - ${resolvedQuiz[0].artist}`;
+        playedQuizTracks.get(currentSession).push(quizLabel);
         game.quizAnswer = { title: resolvedQuiz[0].title, artist: resolvedQuiz[0].artist };
         game.currentTrack = resolvedQuiz[0];
 
-        // 6. Jouer sur Spotify (non-bloquant, avec fallback si pas de trackUri)
-        const firstTrack = resolvedQuiz[0].trackUri || game.queue[0]?.trackUri;
-        if (firstTrack) {
-          try {
-            await playTrack(sessionId, firstTrack);
-          } catch (playErr) {
-            console.error('[Start evening] Playback error:', playErr.message);
-          }
-        } else {
+        // 6. Le fronted joue automatiquement via son useEffect(currentTrack) → host:play-track
+        if (!resolvedQuiz[0].trackUri && !game.queue[0]?.trackUri) {
           console.warn('[Start evening] No playable track URIs (Spotify rate limit?)');
         }
 
@@ -174,9 +172,10 @@ export function setupSocketHandlers(io) {
       const game = sessions.get(currentSession);
       if (!game) return;
       game.quizResponses.clear();
+      const played = playedQuizTracks.get(currentSession) || [];
       if (game.quizRound < config.game.blindTestRounds) {
         game.quizRound++;
-        launchQuizRound(io, game, currentSession);
+        launchQuizRound(io, game, currentSession, played);
       } else {
         game.setMode(MODE.JUKEBOX);
         game.songCountSinceLastQuiz = 0;
@@ -477,20 +476,18 @@ function interleaveQueue(game) {
   game.queue = interleaved;
 }
 
-async function launchQuizRound(io, game, sessionId) {
+async function launchQuizRound(io, game, sessionId, alreadyPlayed = []) {
   try {
     const guests = Array.from(game.guests.values());
-    const quizTrack = await generateQuizTrack(guests, config.llm);
+    const quizTrack = await generateQuizTrack(guests, config.llm, alreadyPlayed);
     const resolved = await resolveTracks([quizTrack]);
+    const label = `${resolved[0].title} - ${resolved[0].artist}`;
+    alreadyPlayed.push(label);
     game.quizAnswer = { title: resolved[0].title, artist: resolved[0].artist };
     game.currentTrack = resolved[0];
     game.quizResponses.clear();
 
-    // Jouer le morceau sur Spotify
-    if (resolved[0].trackUri) {
-      try { await playTrack(sessionId, resolved[0].trackUri); }
-      catch (playErr) { console.error('[Quiz] Playback error:', playErr.message); }
-    }
+    // Le frontend joue automatiquement via son useEffect(currentTrack) → host:play-track
 
     io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
     game.quizEndsAt = Date.now() + config.game.quizTimer * 1000;
@@ -498,8 +495,8 @@ async function launchQuizRound(io, game, sessionId) {
       round: game.quizRound,
       timer: config.game.quizTimer,
     });
-    io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
   } catch (err) {
     console.error('[Quiz] Failed to launch round:', err);
   }
+}
 }
