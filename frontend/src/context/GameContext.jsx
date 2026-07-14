@@ -18,6 +18,8 @@ export function GameProvider({ children }) {
   const [playerPoints, setPlayerPoints] = useState(0);
   const [quizRound, setQuizRound] = useState(0);
   const [quizTimer, setQuizTimer] = useState(0);
+  const [quizRevealed, setQuizRevealed] = useState(false);
+  const [quizResults, setQuizResults] = useState(null);
   const [quizEndsAt, setQuizEndsAt] = useState(null);
 
   const updateFromState = useCallback((state) => {
@@ -51,6 +53,8 @@ export function GameProvider({ children }) {
     quizRound, setQuizRound,
     quizTimer, setQuizTimer,
     quizEndsAt, setQuizEndsAt,
+    quizRevealed, setQuizRevealed,
+    quizResults, setQuizResults,
     updateFromState,
   };
 

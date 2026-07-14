@@ -153,6 +153,39 @@ export function setupSocketHandlers(io) {
       io.to(`session:${currentSession}`).emit('jukebox:open');
     });
 
+    // Révélation du blind-test
+    socket.on('host:reveal-quiz', async () => {
+      const game = sessions.get(currentSession);
+      if (!game || game.mode !== MODE.QUIZ) return;
+      try { await pausePlayback(currentSession); } catch {}
+      const results = [];
+      for (const [username, resp] of game.quizResponses) {
+        results.push({ username, answer: resp.answer, score: resp.score });
+      }
+      io.to(`session:${currentSession}`).emit('quiz:revealed', {
+        answer: game.quizAnswer,
+        results,
+        round: game.quizRound,
+      });
+    });
+
+    // Continuer après la révélation du quiz
+    socket.on('host:continue-after-quiz', () => {
+      const game = sessions.get(currentSession);
+      if (!game) return;
+      game.quizResponses.clear();
+      if (game.quizRound < config.game.blindTestRounds) {
+        game.quizRound++;
+        launchQuizRound(io, game, currentSession);
+      } else {
+        game.setMode(MODE.JUKEBOX);
+        game.songCountSinceLastQuiz = 0;
+        game.currentTrack = null;
+        io.to(`session:${currentSession}`).emit('game:state-update', game.toJSON());
+        io.to(`session:${currentSession}`).emit('jukebox:open');
+      }
+    });
+
     socket.on('host:next-track', () => {
       const game = sessions.get(currentSession);
       if (!game || game.queue.length === 0) return;
@@ -452,6 +485,12 @@ async function launchQuizRound(io, game, sessionId) {
     game.quizAnswer = { title: resolved[0].title, artist: resolved[0].artist };
     game.currentTrack = resolved[0];
     game.quizResponses.clear();
+
+    // Jouer le morceau sur Spotify
+    if (resolved[0].trackUri) {
+      try { await playTrack(sessionId, resolved[0].trackUri); }
+      catch (playErr) { console.error('[Quiz] Playback error:', playErr.message); }
+    }
 
     io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
     game.quizEndsAt = Date.now() + config.game.quizTimer * 1000;

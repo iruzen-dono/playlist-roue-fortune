@@ -188,10 +188,17 @@ export default function HostDashboard() {
     // le SDK a besoin d'un vrai clic pour "activer" l'élément audio interne,
     // sinon Spotify joue "dans le vide" côté navigateur.
     playerRef.current?.activateElement?.();
-
     socket.emit('host:start-evening', { sessionId }, (res) => {
       if (res.error) alert(res.error);
     });
+  };
+
+  const revealQuiz = () => {
+    socket.emit('host:reveal-quiz');
+  };
+
+  const continueAfterQuiz = () => {
+    socket.emit('host:continue-after-quiz');
   };
 
   const startJukebox = () => {
@@ -275,9 +282,15 @@ export default function HostDashboard() {
               {game.mode === 'MODE_QUIZ' && (
                 <>
                   <div className="badge badge-quiz">Blind-test Round {game.quizRound}</div>
-                  <button className="btn btn-secondary" onClick={startJukebox}>
-                    Passer au jukebox
-                  </button>
+                  {!game.quizRevealed ? (
+                    <button className="btn btn-primary" onClick={revealQuiz}>
+                      Révéler
+                    </button>
+                  ) : (
+                    <button className="btn btn-secondary" onClick={continueAfterQuiz}>
+                      Continuer
+                    </button>
+                  )}
                 </>
               )}
               {game.mode === 'MODE_JUKEBOX' && (
@@ -303,6 +316,27 @@ export default function HostDashboard() {
         )}
 
         {/* File d'attente */}
+        {/* Résultats du blind-test */}
+        {game.quizRevealed && game.quizResults && (
+          <div className="panel quiz-results">
+            <div className="panel-title">🎯 Round {game.quizResults.round} — Résultats</div>
+            <div className="quiz-answer-reveal">
+              <strong>Réponse :</strong> {game.quizResults.answer.title} — {game.quizResults.answer.artist}
+            </div>
+            <div className="quiz-scores">
+              {game.quizResults.results.length > 0 ? (
+                game.quizResults.results.map((r, i) => (
+                  <div key={i} className="quiz-score-row">
+                    <span>{r.username}</span>
+                    <span className="score-badge">+{r.score} pts</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-dim">Personne n'a trouvé...</div>
+              )}
+            </div>
+          </div>
+        )}
         <div className="panel">
           <div className="panel-title">File d'attente ({game.queue.length})</div>
           <QueueDisplay queue={game.queue} />

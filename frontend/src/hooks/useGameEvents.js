@@ -25,6 +25,13 @@ export function useGameEvents() {
     const handleQuizStart = ({ round, timer }) => {
       game.setQuizRound(round);
       game.setQuizTimer(timer);
+      game.setQuizResults(null);
+      game.setQuizRevealed(false);
+    };
+
+    const handleQuizRevealed = ({ answer, results, round }) => {
+      game.setQuizRevealed(true);
+      game.setQuizResults({ answer, results, round });
     };
 
     const handleJukeboxOpen = () => {
@@ -34,6 +41,7 @@ export function useGameEvents() {
     socket.on('game:state-update', handleStateUpdate);
     socket.on('jukebox:track-skipped', handleTrackSkipped);
     socket.on('quiz:start', handleQuizStart);
+    socket.on('quiz:revealed', handleQuizRevealed);
     socket.on('jukebox:open', handleJukeboxOpen);
     socket.on('game:next-track', (track) => game.setCurrentTrack(track));
 
@@ -41,6 +49,7 @@ export function useGameEvents() {
       socket.off('game:state-update', handleStateUpdate);
       socket.off('jukebox:track-skipped', handleTrackSkipped);
       socket.off('quiz:start', handleQuizStart);
+      socket.off('quiz:revealed', handleQuizRevealed);
       socket.off('jukebox:open', handleJukeboxOpen);
       socket.off('game:next-track');
     };

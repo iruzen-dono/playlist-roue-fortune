@@ -74,8 +74,13 @@ export default function GuestView() {
       </div>
 
       {/* Quiz mode */}
-      {game.mode === 'MODE_QUIZ' && (
+      {game.mode === 'MODE_QUIZ' && !game.quizRevealed && (
         <QuizCard round={game.quizRound} timer={game.quizTimer} quizEndsAt={game.quizEndsAt} onSubmit={submitQuizAnswer} />
+      )}
+
+      {/* Résultats du blind-test (invité) */}
+      {game.quizRevealed && game.quizResults && (
+        <QuizResults round={game.quizResults.round} answer={game.quizResults.answer} />
       )}
 
       {/* Jukebox mode */}
@@ -120,6 +125,22 @@ export default function GuestView() {
       {game.mode === 'MODE_LOBBY' && (
         <div className="lobby-waiting">En attente que l'hôte lance la soirée...</div>
       )}
+    </div>
+  );
+}
+
+function QuizResults({ round, answer }) {
+  return (
+    <div className="quiz-container quiz-results">
+      <div className="quiz-header">Blind-test — Round {round}</div>
+      <div className="quiz-answer-reveal">
+        <div className="quiz-hint">🎯 C'était :</div>
+        <div className="quiz-reveal-title">{answer.title}</div>
+        <div className="quiz-reveal-artist">{answer.artist}</div>
+      </div>
+      <div className="quiz-waiting">
+        En attente du round suivant...
+      </div>
     </div>
   );
 }
