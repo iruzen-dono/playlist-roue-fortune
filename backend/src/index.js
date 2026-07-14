@@ -20,7 +20,12 @@ const io = new Server(server, {
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: config.nodeEnv === 'development'
+    ? ['http://localhost:5173', 'http://localhost:4173']
+    : process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : false,
+  credentials: true,
+}));
 app.use(express.json());
 
 // Health check

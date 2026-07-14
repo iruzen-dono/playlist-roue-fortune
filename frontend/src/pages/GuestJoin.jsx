@@ -38,6 +38,14 @@ export default function GuestJoin() {
     }, (res) => {
       setJoining(false);
       if (res?.error) return setError(res.error);
+      // Sauvegarder l'identité pour reconnexion automatique
+      sessionStorage.setItem('guest-identity', JSON.stringify({
+        sessionId,
+        username,
+        likedGenres,
+        hatedGenres,
+        favoriteArtists: favoriteArtists.split(',').map(s => s.trim()).filter(Boolean),
+      }));
       game.setSessionId(sessionId);
       game.setUsername(username);
       navigate(`/guest/${sessionId}`);

@@ -14,6 +14,7 @@ const SCOPES = [
 ];
 
 const hostTokens = new Map(); // sessionId → { refreshToken, deviceId }
+const accessTokenCache = new Map(); // sessionId → { token, expiresAt }
 
 export function getHostTokens(sessionId) {
   return hostTokens.get(sessionId) || null;
@@ -80,12 +81,22 @@ export async function refreshAccessToken(refreshToken) {
   return response.json();
 }
 
-// Récupère un access token valide pour un sessionId
+// Récupère un access token valide pour un sessionId (avec cache)
 export async function getValidAccessToken(sessionId) {
   const tokens = hostTokens.get(sessionId);
   if (!tokens?.refreshToken) return null;
 
+  // Vérifier le cache : renvoyer le token si encore valide pour au moins 60s
+  const cached = accessTokenCache.get(sessionId);
+  if (cached && Date.now() < cached.expiresAt - 60000) {
+    return cached.token;
+  }
+
   const data = await refreshAccessToken(tokens.refreshToken);
+  accessTokenCache.set(sessionId, {
+    token: data.access_token,
+    expiresAt: Date.now() + data.expires_in * 1000,
+  });
   return data.access_token;
 }
 

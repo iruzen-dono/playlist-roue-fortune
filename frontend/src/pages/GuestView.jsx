@@ -13,6 +13,26 @@ export default function GuestView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
 
+  // Reconnexion automatique : ré-émettre guest:join à chaque (re)connexion
+  useEffect(() => {
+    if (!socket) return;
+    const rejoin = () => {
+      const saved = sessionStorage.getItem('guest-identity');
+      if (!saved) return;
+      try {
+        const identity = JSON.parse(saved);
+        if (identity.sessionId !== sessionId) return;
+        socket.emit('guest:join', identity, (res) => {
+          if (res?.session) game.updateFromState(res.session);
+        });
+      } catch (e) {
+        // sessionStorage corrompu, ignorer
+      }
+    };
+    socket.on('connect', rejoin);
+    return () => socket.off('connect', rejoin);
+  }, [socket, sessionId, game]);
+
   const searchTracks = () => {
     if (!searchQuery.trim()) return;
     socket.emit('guest:search', { query: searchQuery }, (res) => {
@@ -55,7 +75,7 @@ export default function GuestView() {
 
       {/* Quiz mode */}
       {game.mode === 'MODE_QUIZ' && (
-        <QuizCard round={game.quizRound} timer={game.quizTimer} onSubmit={submitQuizAnswer} />
+        <QuizCard round={game.quizRound} timer={game.quizTimer} quizEndsAt={game.quizEndsAt} onSubmit={submitQuizAnswer} />
       )}
 
       {/* Jukebox mode */}
@@ -104,21 +124,31 @@ export default function GuestView() {
   );
 }
 
-function QuizCard({ round, timer, onSubmit }) {
+function QuizCard({ round, timer, quizEndsAt, onSubmit }) {
   const [answer, setAnswer] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(timer);
 
   useEffect(() => {
-    setTimeLeft(timer);
     setSubmitted(false);
     setAnswer('');
+
+    // Si on a un timestamp absolu, on recalcule le timer en temps réel
+    if (quizEndsAt) {
+      const tick = () => setTimeLeft(Math.max(0, Math.round((quizEndsAt - Date.now()) / 1000)));
+      tick();
+      const id = setInterval(tick, 1000);
+      return () => clearInterval(id);
+    }
+
+    // Fallback timer reçu (si pas de timestamp absolu)
+    setTimeLeft(timer);
     if (timer <= 0) return;
     const interval = setInterval(() => {
       setTimeLeft(prev => prev <= 1 ? (clearInterval(interval), 0) : prev - 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [round, timer]);
+  }, [round, timer, quizEndsAt]);
 
   const handleSubmit = () => {
     if (!answer.trim() || submitted) return;

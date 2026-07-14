@@ -11,8 +11,8 @@ export default function QueueDisplay({ queue }) {
           <div className="queue-info">
             <div className="queue-title">{track.title}</div>
             <div className="queue-artist">{track.artist}</div>
-            {track.contextReason && (
-              <div className="queue-reason">{track.contextReason}</div>
+            {track.reason && (
+              <div className="queue-reason">{track.reason}</div>
             )}
           </div>
           <div className="queue-meta">

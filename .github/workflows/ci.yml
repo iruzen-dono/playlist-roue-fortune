@@ -32,6 +32,16 @@ jobs:
       - name: Check syntax
         run: node --check src/index.js
 
+      - name: Smoke test (le serveur démarre vraiment)
+        run: |
+          node src/index.js &
+          SERVER_PID=$!
+          sleep 3
+          curl -f http://localhost:3001/api/health
+          STATUS=$?
+          kill $SERVER_PID 2>/dev/null
+          exit $STATUS
+
   # ─── Frontend ─────────────────────────────────────
   frontend:
     runs-on: ubuntu-latest

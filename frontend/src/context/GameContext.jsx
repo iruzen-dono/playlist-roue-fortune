@@ -18,6 +18,7 @@ export function GameProvider({ children }) {
   const [playerPoints, setPlayerPoints] = useState(0);
   const [quizRound, setQuizRound] = useState(0);
   const [quizTimer, setQuizTimer] = useState(0);
+  const [quizEndsAt, setQuizEndsAt] = useState(null);
 
   const updateFromState = useCallback((state) => {
     if (!state) return;
@@ -26,6 +27,11 @@ export function GameProvider({ children }) {
     setQueue(state.queue || []);
     setCurrentTrack(state.currentTrack);
     setQuizRound(state.quizRound || 0);
+    // Timer absolu : recalculé côté client à partir du timestamp serveur
+    if (state.quizEndsAt) {
+      setQuizEndsAt(state.quizEndsAt);
+      setQuizTimer(Math.max(0, Math.round((state.quizEndsAt - Date.now()) / 1000)));
+    }
     // Trouver les points du joueur courant
     if (username) {
       const me = (state.guests || []).find(g => g.username === username);
@@ -44,6 +50,7 @@ export function GameProvider({ children }) {
     playerPoints, setPlayerPoints,
     quizRound, setQuizRound,
     quizTimer, setQuizTimer,
+    quizEndsAt, setQuizEndsAt,
     updateFromState,
   };
 

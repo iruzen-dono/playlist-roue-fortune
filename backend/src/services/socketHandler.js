@@ -131,6 +131,7 @@ export function setupSocketHandlers(io) {
         }
 
         io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
+        game.quizEndsAt = Date.now() + config.game.quizTimer * 1000;
         io.to(`session:${sessionId}`).emit('quiz:start', {
           round: 1,
           timer: config.game.quizTimer,
@@ -312,11 +313,18 @@ export function setupSocketHandlers(io) {
         return callback?.({ error: 'Points insuffisants' });
       }
 
-      guest.points -= config.game.skipCost;
       const track = game.queue.find(t => t.trackUri === trackId) || game.currentTrack;
-      if (track) {
-        track.skipVotesCount = (track.skipVotesCount || 0) + 1;
+      if (!track) return callback?.({ error: 'Morceau introuvable' });
+
+      // Dédoublonnage : un seul vote par joueur par morceau
+      if (!track.skipVoters) track.skipVoters = [];
+      if (track.skipVoters.includes(currentUsername)) {
+        return callback?.({ error: 'Tu as déjà voté pour ce morceau' });
       }
+
+      guest.points -= config.game.skipCost;
+      track.skipVoters.push(currentUsername);
+      track.skipVotesCount = track.skipVoters.length;
 
       // Vérifier seuil
       const threshold = game.skipThreshold();
@@ -348,13 +356,22 @@ export function setupSocketHandlers(io) {
         return callback?.({ error: 'Points insuffisants' });
       }
 
-      guest.points -= config.game.boostCost;
       const trackIndex = game.queue.findIndex(t => t.trackUri === trackId);
-      if (trackIndex > 0) {
-        const [track] = game.queue.splice(trackIndex, 1);
-        track.boostScore = (track.boostScore || 0) + 1;
-        game.queue.splice(0, 0, track); // Mettre en 2ème position (après le current)
+      if (trackIndex === -1) return callback?.({ error: 'Morceau introuvable dans la file' });
+
+      const track = game.queue[trackIndex];
+      // Dédoublonnage
+      if (!track.boostVoters) track.boostVoters = [];
+      if (track.boostVoters.includes(currentUsername)) {
+        return callback?.({ error: 'Tu as déjà boosté ce morceau' });
       }
+
+      guest.points -= config.game.boostCost;
+      track.boostVoters.push(currentUsername);
+      track.boostScore = (track.boostScore || 0) + 1;
+      // Mettre en 2ème position (après le current)
+      const [boosted] = game.queue.splice(trackIndex, 1);
+      game.queue.splice(0, 0, boosted);
 
       const sessionId = currentSession;
       io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
@@ -436,6 +453,8 @@ async function launchQuizRound(io, game, sessionId) {
     game.currentTrack = resolved[0];
     game.quizResponses.clear();
 
+    io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
+    game.quizEndsAt = Date.now() + config.game.quizTimer * 1000;
     io.to(`session:${sessionId}`).emit('quiz:start', {
       round: game.quizRound,
       timer: config.game.quizTimer,

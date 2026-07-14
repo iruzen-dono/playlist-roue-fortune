@@ -120,16 +120,12 @@ export async function generateInitialPlaylist(guestPreferences, llmConfig) {
     try {
       return JSON.parse(cleaned);
     } catch {
-      try {
-        return new Function('return (' + cleaned + ')')();
-      } catch {
-        const fixed = cleaned
-          .replace(/([{,]\s*)(\w[\w$]*)(\s*:)/g, '$1"$2"$3')
-          .replace(/,\s*([}\]])/g, '$1')
-          .replace(/\n\s*/g, ' ')
-          .replace(/\s+/g, ' ');
-        return JSON.parse(fixed);
-      }
+      const fixed = cleaned
+        .replace(/([{,]\s*)(\w[\w$]*)(\s*:)/g, '$1"$2"$3')
+        .replace(/,\s*([}\]])/g, '$1')
+        .replace(/\n\s*/g, ' ')
+        .replace(/\s+/g, ' ');
+      return JSON.parse(fixed);
     }
   } catch (err) {
     console.error('[LLM] generateInitialPlaylist failed, using fallback:', err.message);

@@ -8,7 +8,7 @@ export default function HostSetup() {
   const game = useGame();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
-  const [sessionId, setSessionId] = useState(`s-${Date.now().toString(36)}`);
+  const [sessionId, setSessionId] = useState(`s-${crypto.randomUUID().slice(0, 8)}`);
   const [error, setError] = useState('');
 
   const createSession = () => {

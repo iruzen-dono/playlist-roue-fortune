@@ -64,20 +64,24 @@ async function searchTrack(query) {
 }
 
 // Recherche multiple : associer titre+artiste LLM → track_uri Spotify
-export async function resolveTracks(trackList) {
+export async function resolveTracks(trackList, concurrency = 3) {
   const results = [];
-  for (const item of trackList) {
-    const query = `${item.title} ${item.artist}`;
-    const track = await searchTrack(query);
-    results.push({
-      ...item,
-      trackUri: track?.uri || null,
-      spotifyId: track?.id || null,
-      resolved: !!track,
-    });
-    // Petit délai pour éviter rate limit
-    await new Promise(r => setTimeout(r, 100));
+
+  for (let i = 0; i < trackList.length; i += concurrency) {
+    const batch = trackList.slice(i, i + concurrency);
+    const resolved = await Promise.all(batch.map(async (item) => {
+      const query = `${item.title} ${item.artist}`;
+      const track = await searchTrack(query);
+      return {
+        ...item,
+        trackUri: track?.uri || null,
+        spotifyId: track?.id || null,
+        resolved: !!track,
+      };
+    }));
+    results.push(...resolved);
   }
+
   return results;
 }
 

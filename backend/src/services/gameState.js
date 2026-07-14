@@ -1,3 +1,5 @@
+import { config } from '../config/index.js';
+
 // State machine : MODE_QUIZ ↔ MODE_JUKEBOX
 export const MODE = {
   LOBBY: 'MODE_LOBBY',         // attente des joueurs
@@ -14,6 +16,7 @@ export class GameState {
     this.queue = [];                 // playlist_queue items
     this.currentTrack = null;
     this.quizRound = 0;
+    this.quizEndsAt = null;          // timestamp absolu en ms pour le timer du quiz
     this.totalTracksPlayed = 0;
     this.songCountSinceLastQuiz = 0;
     this.quizAnswer = null;          // { title, artist } pour le blind-test en cours
@@ -47,7 +50,7 @@ export class GameState {
 
   skipThreshold() {
     const total = this.guestCount();
-    return total > 0 ? Math.ceil(total * 0.5) : 1;
+    return total > 0 ? Math.ceil(total * (config.game.skipThreshold || 0.5)) : 1;
   }
 
   setMode(newMode) {
@@ -63,6 +66,7 @@ export class GameState {
       queue: this.queue,
       currentTrack: this.currentTrack,
       quizRound: this.quizRound,
+      quizEndsAt: this.quizEndsAt,
       totalTracksPlayed: this.totalTracksPlayed,
       guestCount: this.guestCount(),
     };
