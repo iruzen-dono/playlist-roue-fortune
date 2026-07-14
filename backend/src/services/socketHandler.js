@@ -499,4 +499,3 @@ async function launchQuizRound(io, game, sessionId, alreadyPlayed = []) {
     console.error('[Quiz] Failed to launch round:', err);
   }
 }
-}
