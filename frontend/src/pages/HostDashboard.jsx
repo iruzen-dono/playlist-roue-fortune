@@ -283,13 +283,23 @@ export default function HostDashboard() {
                 <>
                   <div className="badge badge-quiz">Blind-test Round {game.quizRound}</div>
                   {!game.quizRevealed ? (
-                    <button className="btn btn-primary" onClick={revealQuiz}>
-                      Révéler
-                    </button>
+                    <div className="controls-group">
+                      <button className="btn btn-primary" onClick={revealQuiz}>
+                        Révéler
+                      </button>
+                      <button className="btn btn-ghost" onClick={startJukebox}>
+                        Passer au jukebox
+                      </button>
+                    </div>
                   ) : (
-                    <button className="btn btn-secondary" onClick={continueAfterQuiz}>
-                      Continuer
-                    </button>
+                    <div className="controls-group">
+                      <button className="btn btn-secondary" onClick={continueAfterQuiz}>
+                        Continuer
+                      </button>
+                      <button className="btn btn-ghost" onClick={startJukebox}>
+                        Passer au jukebox
+                      </button>
+                    </div>
                   )}
                 </>
               )}

@@ -186,6 +186,24 @@ a:hover { text-decoration: underline; }
   margin-top: 8px;
 }
 
+.btn-ghost {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+.btn-ghost:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.04);
+}
+
+.controls-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .btn-spotify {
   background: #1db954;
   border-color: #1db954;

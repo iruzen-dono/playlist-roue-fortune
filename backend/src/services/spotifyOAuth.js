@@ -84,7 +84,10 @@ export async function refreshAccessToken(refreshToken) {
 // Récupère un access token valide pour un sessionId (avec cache)
 export async function getValidAccessToken(sessionId) {
   const tokens = hostTokens.get(sessionId);
-  if (!tokens?.refreshToken) return null;
+  if (!tokens?.refreshToken) {
+    console.error(`[Spotify] No refresh token for ${sessionId} — tokens map:`, Object.fromEntries(hostTokens));
+    return null;
+  }
 
   // Vérifier le cache : renvoyer le token si encore valide pour au moins 60s
   const cached = accessTokenCache.get(sessionId);
@@ -136,6 +139,10 @@ export async function playTrack(sessionId, trackUri, positionMs = 0) {
     throw new Error('Spotify device not found');
   }
   if (!response.ok && response.status !== 204) {
+    // Lire le corps de la réponse pour debug
+    let body = '';
+    try { body = await response.text(); } catch {}
+    console.error(`[Spotify] Play 403 body for device ${tokens.deviceId}: ${body}`);
     throw new Error(`Play failed: ${response.status}`);
   }
 }
