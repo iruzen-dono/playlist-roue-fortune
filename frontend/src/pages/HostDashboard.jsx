@@ -341,7 +341,7 @@ export default function HostDashboard() {
           <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', marginBottom: 12 }}>
             Scannez le QR code ou partagez le lien
           </p>
-          <QRCodeComponent url={joinUrl} />
+          <QRCodeComponent value={joinUrl} />
           <div style={{ marginTop: 12 }}>
             <code className="invite-link" onClick={() => navigator.clipboard?.writeText(joinUrl)}>
               {joinUrl}
@@ -418,10 +418,10 @@ export default function HostDashboard() {
         )}
 
         {/* Participants connectés */}
-        <PlayerList players={game.guests} />
+        <PlayerList guests={game.guests} />
 
         {/* File d'attente */}
-        <QueueDisplay />
+        <QueueDisplay queue={game.queue} />
       </div>
     </div>
   );

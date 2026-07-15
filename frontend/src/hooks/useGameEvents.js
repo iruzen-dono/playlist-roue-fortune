@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useGame } from '../context/GameContext';
 import { useSocket } from '../context/SocketContext';
 
@@ -7,18 +7,15 @@ import { useSocket } from '../context/SocketContext';
 export function useGameEvents() {
   const { socket } = useSocket();
   const game = useGame();
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (!socket) return;
 
-    // Quand on reçoit une update d'état
     const handleStateUpdate = (state) => {
       game.updateFromState(state);
     };
 
-    const handleTrackSkipped = ({ trackId }) => {
-      // Le morceau a été skip — le host peut avancer
+    const handleTrackSkipped = () => {
       game.setCurrentTrack(null);
     };
 
@@ -44,13 +41,17 @@ export function useGameEvents() {
       game.setMode('MODE_JUKEBOX');
     };
 
+    const handleNextTrack = (track) => {
+      game.setCurrentTrack(track);
+    };
+
     socket.on('game:state-update', handleStateUpdate);
     socket.on('jukebox:track-skipped', handleTrackSkipped);
     socket.on('quiz:start', handleQuizStart);
     socket.on('quiz:loading', handleQuizLoading);
     socket.on('quiz:revealed', handleQuizRevealed);
     socket.on('jukebox:open', handleJukeboxOpen);
-    socket.on('game:next-track', (track) => game.setCurrentTrack(track));
+    socket.on('game:next-track', handleNextTrack);
 
     return () => {
       socket.off('game:state-update', handleStateUpdate);
@@ -59,7 +60,7 @@ export function useGameEvents() {
       socket.off('quiz:loading', handleQuizLoading);
       socket.off('quiz:revealed', handleQuizRevealed);
       socket.off('jukebox:open', handleJukeboxOpen);
-      socket.off('game:next-track');
+      socket.off('game:next-track', handleNextTrack);
     };
-  }, [socket, game]);
+  }, [socket]);
 }
