@@ -43,6 +43,8 @@ export function setupSocketHandlers(io) {
               likedGenres: g.likedGenres || [],
               hatedGenres: g.hatedGenres || [],
               favoriteArtists: g.favoriteArtists || [],
+              likedArtists: g.likedArtists || [],
+              mood: g.mood || null,
             });
           }
           sessions.set(sessionId, game);
@@ -258,7 +260,7 @@ export function setupSocketHandlers(io) {
 
     // ─── GUEST ACTIONS ─────────────────────────────────────────
 
-    socket.on('guest:join', ({ sessionId, username, likedGenres, hatedGenres, favoriteArtists }, callback) => {
+    socket.on('guest:join', ({ sessionId, username, likedGenres, hatedGenres, favoriteArtists, likedArtists, mood }, callback) => {
       const game = sessions.get(sessionId);
       console.log(`[Guest] Join attempt: ${username} → ${sessionId}, game exists: ${!!game}, room size: ${game ? io.sockets.adapter.rooms.get(`session:${sessionId}`)?.size : 'N/A'}`);
       if (!game) return callback?.({ error: 'Session not found' });
@@ -272,6 +274,8 @@ export function setupSocketHandlers(io) {
           existing.likedGenres = likedGenres || existing.likedGenres;
           existing.hatedGenres = hatedGenres || existing.hatedGenres;
           existing.favoriteArtists = favoriteArtists || existing.favoriteArtists;
+          if (likedArtists) existing.likedArtists = likedArtists;
+          if (mood) existing.mood = mood;
         }
       }
 
@@ -287,6 +291,8 @@ export function setupSocketHandlers(io) {
         guestData.likedGenres = likedGenres || guestData.likedGenres || [];
         guestData.hatedGenres = hatedGenres || guestData.hatedGenres || [];
         guestData.favoriteArtists = favoriteArtists || guestData.favoriteArtists || [];
+        if (likedArtists) guestData.likedArtists = likedArtists;
+        if (mood) guestData.mood = mood;
       }
 
       // Persistance locale

@@ -106,3 +106,18 @@ export async function searchTracks(query, limit = 10) {
   const data = await response.json();
   return data.tracks?.items || [];
 }
+
+// Recherche d'artistes (pour le onboarding visuel)
+export async function searchArtists(query, limit = 5) {
+  const tk = await ensureToken();
+  if (!tk) return null;
+
+  const response = await fetchWithRetry(
+    `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=artist&limit=${limit}`,
+    { headers: { 'Authorization': `Bearer ${tk}` } }
+  );
+
+  if (!response.ok) return null;
+  const data = await response.json();
+  return data.artists?.items?.[0] || null;
+}

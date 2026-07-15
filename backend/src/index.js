@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { config } from './config/index.js';
 import { setupSocketHandlers } from './services/socketHandler.js';
 import { getAuthUrl, exchangeCode, setHostTokens, setDeviceId, getValidAccessToken } from './services/spotifyOAuth.js';
+import { getCuratedArtists, searchArtist } from './services/artistDiscovery.js';
 
 const app = express();
 const server = createServer(app);
@@ -32,6 +33,29 @@ app.use(express.json());
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
+});
+
+// Artistes curated (onboarding invité)
+app.get('/api/curated-artists', async (req, res) => {
+  try {
+    const artists = await getCuratedArtists();
+    res.json({ artists });
+  } catch (err) {
+    console.error('[Artist] Curated error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Recherche en direct d'artistes Spotify
+app.get('/api/search-artists', async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 1) return res.json({ artists: [] });
+  try {
+    const artist = await searchArtist(q.trim());
+    res.json({ artist });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Spotify OAuth — login
