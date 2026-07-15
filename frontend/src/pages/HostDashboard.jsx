@@ -44,6 +44,7 @@ export default function HostDashboard() {
   const [quizLoading, setQuizLoading] = useState(false);
   const playerRef = useRef(null);
   const spotifyRetryRef = useRef(0);
+  const [hostTimeLeft, setHostTimeLeft] = useState(null);
   const [searchParams] = useSearchParams();
 
   // Détecter retour OAuth
@@ -103,6 +104,18 @@ export default function HostDashboard() {
     socket.on('quiz:launch-error', onQuizError);
     return () => { socket.off('quiz:start', onQuizStart); socket.off('quiz:launch-error', onQuizError); };
   }, [socket]);
+
+  // Timer décompte live côté host
+  useEffect(() => {
+    if (!game.quizEndsAt) { setHostTimeLeft(null); return; }
+    const tick = () => {
+      const left = Math.max(0, Math.floor((game.quizEndsAt - Date.now()) / 1000));
+      setHostTimeLeft(left);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [game.quizEndsAt]);
 
   const loadSpotifySDK = () => {
     // CRITIQUE : définir le callback AVANT de charger le script,
@@ -313,6 +326,17 @@ export default function HostDashboard() {
               {game.mode === 'MODE_QUIZ' && (
                 <>
                   <div className="badge badge-quiz">Blind-test Round {game.quizRound}</div>
+                  {hostTimeLeft !== null && (
+                    <div className="quiz-timer" style={{
+                      fontSize: '1.4rem',
+                      fontWeight: 700,
+                      color: hostTimeLeft <= 5 ? 'var(--danger)' : 'var(--accent)',
+                      minWidth: 40,
+                      textAlign: 'center',
+                    }}>
+                      {hostTimeLeft}s
+                    </div>
+                  )}
                   {!game.quizRevealed ? (
                     <div className="controls-group">
                       <button className="btn btn-primary" onClick={revealQuiz}>
