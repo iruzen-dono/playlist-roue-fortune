@@ -281,7 +281,15 @@ export function setupSocketHandlers(io) {
 
       console.log(`[Guest] ${username} joined ${sessionId}, room now has ${io.sockets.adapter.rooms.get(`session:${sessionId}`)?.size} sockets`);
 
-      // Persistance locale (fallback quand Supabase absent)
+      // Appliquer les préférences du formulaire au game state
+      const guestData = game.guests.get(username);
+      if (guestData) {
+        guestData.likedGenres = likedGenres || guestData.likedGenres || [];
+        guestData.hatedGenres = hatedGenres || guestData.hatedGenres || [];
+        guestData.favoriteArtists = favoriteArtists || guestData.favoriteArtists || [];
+      }
+
+      // Persistance locale
       saveGuestsToFile(sessionId, game.guests);
 
       callback?.({ ok: true, session: game.toJSON() });
