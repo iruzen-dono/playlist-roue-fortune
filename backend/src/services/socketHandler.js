@@ -128,11 +128,12 @@ export function setupSocketHandlers(io) {
           console.warn('[Start evening] No playable track URIs (Spotify rate limit?)');
         }
 
-        io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
         game.quizEndsAt = Date.now() + config.game.quizTimer * 1000;
+        io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
         io.to(`session:${sessionId}`).emit('quiz:start', {
           round: 1,
           timer: config.game.quizTimer,
+          quizEndsAt: game.quizEndsAt,
         });
 
         callback?.({ ok: true, session: game.toJSON() });
@@ -489,11 +490,12 @@ async function launchQuizRound(io, game, sessionId, alreadyPlayed = []) {
 
     // Le frontend joue automatiquement via son useEffect(currentTrack) → host:play-track
 
-    io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
     game.quizEndsAt = Date.now() + config.game.quizTimer * 1000;
+    io.to(`session:${sessionId}`).emit('game:state-update', game.toJSON());
     io.to(`session:${sessionId}`).emit('quiz:start', {
       round: game.quizRound,
       timer: config.game.quizTimer,
+      quizEndsAt: game.quizEndsAt,
     });
   } catch (err) {
     console.error('[Quiz] Failed to launch round:', err);

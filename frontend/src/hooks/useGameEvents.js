@@ -22,11 +22,12 @@ export function useGameEvents() {
       game.setCurrentTrack(null);
     };
 
-    const handleQuizStart = ({ round, timer }) => {
+    const handleQuizStart = ({ round, timer, quizEndsAt }) => {
       game.setQuizRound(round);
       game.setQuizTimer(timer);
       game.setQuizResults(null);
       game.setQuizRevealed(false);
+      if (quizEndsAt) game.setQuizEndsAt(quizEndsAt);
     };
 
     const handleQuizRevealed = ({ answer, results, round }) => {
