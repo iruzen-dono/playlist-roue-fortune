@@ -9,6 +9,28 @@ import { saveGuestsToFile, loadGuestsFromFile } from '../services/localDb.js';
 const sessions = new Map();
 const playedQuizTracks = new Map(); // sessionId → [labels déjà joués]
 
+//━━━ Rate limiter simple (par socket, par event) ━━━
+const rateLimits = new Map();
+function checkRate(socketId, event, maxPerMinute = 20) {
+  const key = `${socketId}:${event}`;
+  const now = Date.now();
+  const entry = rateLimits.get(key);
+  if (!entry || now - entry.windowStart > 60000) {
+    rateLimits.set(key, { windowStart: now, count: 1 });
+    return true;
+  }
+  if (entry.count >= maxPerMinute) return false;
+  entry.count++;
+  return true;
+}
+// Nettoyer les entrées périmées toutes les 5 min
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimits) {
+    if (now - entry.windowStart > 120000) rateLimits.delete(key);
+  }
+}, 300000);
+
 function getOrCreateSession(sessionId) {
   if (!sessions.has(sessionId)) {
     sessions.set(sessionId, new GameState(sessionId));
@@ -125,22 +147,24 @@ export function setupSocketHandlers(io) {
           });
         }
 
-        // 4. Démarrer en MODE_QUIZ (blind-test d'abord)
-        game.setMode(MODE.QUIZ);
-        game.quizRound = 1;
-        const playedKey = `session:${currentSession}`;
-        playedQuizTracks.set(currentSession, []);
+        // 4. Initialiser le suivi des quiz déjà joués
+        const playedKey = `session:${sessionId}`;
+        playedQuizTracks.set(sessionId, []);
 
         // 5. Générer le premier son à deviner
         io.to(`session:${sessionId}`).emit('quiz:loading');
         const quizTrack = await generateQuizTrack(guests, config.llm, []);
         const resolvedQuiz = await resolveTracks([quizTrack]);
         const quizLabel = `${resolvedQuiz[0].title} - ${resolvedQuiz[0].artist}`;
-        playedQuizTracks.get(currentSession).push(quizLabel);
+        playedQuizTracks.get(sessionId).push(quizLabel);
         game.quizAnswer = { title: resolvedQuiz[0].title, artist: resolvedQuiz[0].artist };
         game.currentTrack = resolvedQuiz[0];
 
-        // 6. Le fronted joue automatiquement via son useEffect(currentTrack) → host:play-track
+        // 6. Maintenant qu'on a un quiz valide, passer en MODE_QUIZ
+        game.setMode(MODE.QUIZ);
+        game.quizRound = 1;
+
+        // 7. Le fronted joue automatiquement via son useEffect(currentTrack) → host:play-track
         if (!resolvedQuiz[0].trackUri && !game.queue[0]?.trackUri) {
           console.warn('[Start evening] No playable track URIs (Spotify rate limit?)');
         }
@@ -156,6 +180,7 @@ export function setupSocketHandlers(io) {
         callback?.({ ok: true, session: game.toJSON() });
       } catch (err) {
         console.error('[Start evening] Error:', err);
+        io.to(`session:${sessionId}`).emit('quiz:launch-error', { message: 'Erreur initialisation — réessaie' });
         callback?.({ error: err.message });
       }
     });
@@ -278,6 +303,7 @@ export function setupSocketHandlers(io) {
     // ─── GUEST ACTIONS ─────────────────────────────────────────
 
     socket.on('guest:join', ({ sessionId, username, likedGenres, hatedGenres, favoriteArtists, likedArtists, mood }, callback) => {
+      if (!checkRate(socket.id, 'guest:join', 10)) return callback?.({ error: 'Trop de requêtes, attends un peu' });
       const game = sessions.get(sessionId);
       console.log(`[Guest] Join attempt: ${username} → ${sessionId}, game exists: ${!!game}, room size: ${game ? io.sockets.adapter.rooms.get(`session:${sessionId}`)?.size : 'N/A'}`);
       if (!game) return callback?.({ error: 'Session not found' });
@@ -310,6 +336,7 @@ export function setupSocketHandlers(io) {
         guestData.favoriteArtists = favoriteArtists || guestData.favoriteArtists || [];
         if (likedArtists) guestData.likedArtists = likedArtists;
         if (mood) guestData.mood = mood;
+        guestData.connected = true;
       }
 
       // Persistance locale
@@ -321,6 +348,7 @@ export function setupSocketHandlers(io) {
 
     // Recherche Spotify pour les invités
     socket.on('guest:search', async ({ query }, callback) => {
+      if (!checkRate(socket.id, 'guest:search', 30)) return callback?.({ error: 'Trop de requêtes, attends un peu' });
       try {
         const results = await searchTracks(query);
         callback?.({ tracks: results });
@@ -331,6 +359,7 @@ export function setupSocketHandlers(io) {
 
     // Ajouter un morceau à la file (coût en points)
     socket.on('guest:add-track', ({ track }, callback) => {
+      if (!checkRate(socket.id, 'guest:add-track', 10)) return callback?.({ error: 'Trop de requêtes' });
       const game = sessions.get(currentSession);
       if (!game) return callback?.({ error: 'No session' });
 
@@ -359,6 +388,7 @@ export function setupSocketHandlers(io) {
 
     // Voter SKIP
     socket.on('guest:vote-skip', ({ trackId }, callback) => {
+      if (!checkRate(socket.id, 'guest:vote-skip', 10)) return;
       const game = sessions.get(currentSession);
       if (!game) return;
 
@@ -401,7 +431,8 @@ export function setupSocketHandlers(io) {
     });
 
     // Voter BOOST
-    socket.on('guest:vote-boost', ({ trackId }, callback) => {
+    socket.on('guest:vote-boost', async ({ trackId }, callback) => {
+      if (!checkRate(socket.id, 'guest:vote-boost', 10)) return;
       const game = sessions.get(currentSession);
       if (!game) return;
 
@@ -432,10 +463,11 @@ export function setupSocketHandlers(io) {
       callback?.({ ok: true, points: guest.points });
     });
 
-    // Réponse blind-test
-    socket.on('guest:quiz-answer', ({ answer }, callback) => {
+    // Répondre au blind-test
+    socket.on('guest:quiz-answer', ({ answer, responseTime }, callback) => {
+      if (!checkRate(socket.id, 'guest:quiz-answer', 30)) return callback?.({ error: 'Trop de requêtes' });
       const game = sessions.get(currentSession);
-      if (!game || !game.quizAnswer) return;
+      if (!game || game.mode !== MODE.QUIZ) return callback?.({ error: 'Pas de quiz en cours' });
 
       const normalized = s => s.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
       const correctTitle = normalized(game.quizAnswer.title);
@@ -443,7 +475,7 @@ export function setupSocketHandlers(io) {
       const userAnswer = normalized(answer);
 
       // Score basé sur la vitesse (bonus aux premiers)
-      const responseTime = Date.now();
+      const receivedAt = Date.now();
       const isCorrect = userAnswer.includes(correctTitle) || userAnswer.includes(correctArtist);
       const previousResponses = game.quizResponses.size;
 
@@ -451,7 +483,7 @@ export function setupSocketHandlers(io) {
         const score = Math.max(50, 150 - previousResponses * 25);
         const guest = game.guests.get(currentUsername);
         if (guest) guest.points += score;
-        game.quizResponses.set(currentUsername, { answer, score, time: responseTime });
+        game.quizResponses.set(currentUsername, { answer, score, time: receivedAt });
       }
 
       callback?.({ correct: isCorrect });
@@ -464,6 +496,8 @@ export function setupSocketHandlers(io) {
         const game = sessions.get(currentSession);
         if (game) {
           console.log(`[Socket] ${currentUsername} disconnected from ${currentSession}`);
+          const guest = game.guests.get(currentUsername);
+          if (guest) guest.connected = false;
           io.to(`session:${currentSession}`).emit('game:state-update', game.toJSON());
         }
       }

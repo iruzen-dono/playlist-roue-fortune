@@ -36,6 +36,9 @@ export class GameState {
       likedGenres: [],
       hatedGenres: [],
       favoriteArtists: [],
+      likedArtists: [],
+      mood: null,
+      connected: true,
       joinedAt: Date.now(),
     });
     return true;
@@ -49,8 +52,16 @@ export class GameState {
     return this.guests.size;
   }
 
+  activeGuestCount() {
+    let count = 0;
+    for (const [, guest] of this.guests) {
+      if (guest.connected) count++;
+    }
+    return Math.max(count, 1); // au moins 1 pour éviter skip tout seul
+  }
+
   skipThreshold() {
-    const total = this.guestCount();
+    const total = this.activeGuestCount();
     return total > 0 ? Math.ceil(total * (config.game.skipThreshold || 0.5)) : 1;
   }
 

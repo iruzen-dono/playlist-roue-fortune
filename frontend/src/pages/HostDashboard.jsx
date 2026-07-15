@@ -112,7 +112,7 @@ export default function HostDashboard() {
     return () => socket.off('spotify:device-ready', handleReady);
   }, [socket]);
 
-  // Réinitialiser quizLoading au démarrage d'un round ou en cas d'erreur
+  // Réinitialiser quizLoading au démarrage d'un round ou en cas d'erreur + timeout 30s
   useEffect(() => {
     if (!socket) return;
     const onQuizStart = () => setQuizLoading(false);
@@ -121,6 +121,13 @@ export default function HostDashboard() {
     socket.on('quiz:launch-error', onQuizError);
     return () => { socket.off('quiz:start', onQuizStart); socket.off('quiz:launch-error', onQuizError); };
   }, [socket]);
+
+  // Timeout de sécurité : si quizLoading reste > 30s, forcer le reset
+  useEffect(() => {
+    if (!quizLoading) return;
+    const tid = setTimeout(() => setQuizLoading(false), 30000);
+    return () => clearTimeout(tid);
+  }, [quizLoading]);
 
   // Avance automatique quand les invités votent skip
   useEffect(() => {
