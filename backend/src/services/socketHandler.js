@@ -388,7 +388,7 @@ export function setupSocketHandlers(io) {
 
     // Voter SKIP
     socket.on('guest:vote-skip', ({ trackId }, callback) => {
-      if (!checkRate(socket.id, 'guest:vote-skip', 10)) return;
+      if (!checkRate(socket.id, 'guest:vote-skip', 10)) return callback?.({ error: 'Trop de requêtes' });
       const game = sessions.get(currentSession);
       if (!game) return;
 
@@ -432,7 +432,7 @@ export function setupSocketHandlers(io) {
 
     // Voter BOOST
     socket.on('guest:vote-boost', async ({ trackId }, callback) => {
-      if (!checkRate(socket.id, 'guest:vote-boost', 10)) return;
+      if (!checkRate(socket.id, 'guest:vote-boost', 10)) return callback?.({ error: 'Trop de requêtes' });
       const game = sessions.get(currentSession);
       if (!game) return;
 
