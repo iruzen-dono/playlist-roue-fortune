@@ -22,6 +22,7 @@ export class GameState {
     this.quizAnswer = null;          // { title, artist } pour le blind-test en cours
     this.quizResponses = new Map();  // username → { answer, timestamp }
     this.createdAt = Date.now();
+    this.hostPreferences = { likedArtists: [], mood: null };
   }
 
   isHost() { return this.mode === MODE.LOBBY || this.mode === MODE.RECAP; }
@@ -62,13 +63,19 @@ export class GameState {
     return {
       sessionId: this.sessionId,
       mode: this.mode,
-      guests: Array.from(this.guests.entries()).map(([k, v]) => ({ username: k, points: v.points })),
+      guests: Array.from(this.guests.entries()).map(([k, v]) => ({
+        username: k,
+        points: v.points,
+        likedArtists: v.likedArtists || [],
+        mood: v.mood || null,
+      })),
       queue: this.queue,
       currentTrack: this.currentTrack,
       quizRound: this.quizRound,
       quizEndsAt: this.quizEndsAt,
       totalTracksPlayed: this.totalTracksPlayed,
       guestCount: this.guestCount(),
+      hostPreferences: this.hostPreferences,
     };
   }
 }

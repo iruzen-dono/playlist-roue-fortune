@@ -78,11 +78,15 @@ export function setupSocketHandlers(io) {
     });
 
     // Démarrage de la soirée → génération playlist + premier blind-test
-    socket.on('host:start-evening', async ({ sessionId: payloadSessionId } = {}, callback) => {
+    socket.on('host:start-evening', async ({ sessionId: payloadSessionId, hostPreferences } = {}, callback) => {
       const sessionId = payloadSessionId || currentSession;
       const game = sessions.get(sessionId);
       if (!game || game.guestCount() === 0) {
         return callback?.({ error: 'Aucun invité dans la session' });
+      }
+
+      if (hostPreferences) {
+        game.hostPreferences = hostPreferences;
       }
 
       const guests = Array.from(game.guests.values()).map(g => ({
@@ -90,7 +94,20 @@ export function setupSocketHandlers(io) {
         likedGenres: g.likedGenres,
         hatedGenres: g.hatedGenres,
         favoriteArtists: g.favoriteArtists,
+        likedArtists: g.likedArtists || [],
+        mood: g.mood || null,
       }));
+
+      // Ajouter les préférences de l'hôte en tête de liste (comme un guest "Hôte")
+      const hostGuest = {
+        username: 'Hôte',
+        likedGenres: [],
+        hatedGenres: [],
+        favoriteArtists: (game.hostPreferences.likedArtists || []).map(a => a.name),
+        likedArtists: game.hostPreferences.likedArtists || [],
+        mood: game.hostPreferences.mood || null,
+      };
+      guests.unshift(hostGuest);
 
       try {
         // 1. Générer la playlist initiale via LLM
