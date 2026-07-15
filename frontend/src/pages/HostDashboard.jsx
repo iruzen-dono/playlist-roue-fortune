@@ -122,6 +122,17 @@ export default function HostDashboard() {
     return () => { socket.off('quiz:start', onQuizStart); socket.off('quiz:launch-error', onQuizError); };
   }, [socket]);
 
+  // Avance automatique quand les invités votent skip
+  useEffect(() => {
+    if (!socket) return;
+    const onAdvance = () => {
+      console.log('[Host] Advance requested (skip/next)');
+      socket.emit('host:next-track');
+    };
+    socket.on('host:advance', onAdvance);
+    return () => socket.off('host:advance', onAdvance);
+  }, [socket]);
+
   // Timer décompte live côté host
   useEffect(() => {
     if (!game.quizEndsAt) { setHostTimeLeft(null); return; }
@@ -408,12 +419,28 @@ export default function HostDashboard() {
           </div>
         )}
 
-        {game.quizRevealed && (
+        {game.quizRevealed && game.quizResults && (
           <div className="panel">
             <div className="panel-title">Résultats du Blind-test</div>
             <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-              {game.quizAnswer?.title} — {game.quizAnswer?.artist}
+              {game.quizResults.answer?.title || '—'} — {game.quizResults.answer?.artist || '—'}
             </p>
+            {game.quizResults.results?.length > 0 && (
+              <div className="results-table">
+                <div className="results-table-header">
+                  <span>Joueur</span>
+                  <span>Réponse</span>
+                  <span>Points</span>
+                </div>
+                {game.quizResults.results.map((r, i) => (
+                  <div key={i} className={`results-row ${r.score > 0 ? 'results-row-correct' : 'results-row-wrong'}`}>
+                    <span className="results-name">{r.username}</span>
+                    <span className="results-answer">{r.answer || '—'}</span>
+                    <span className="results-score">+{r.score}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

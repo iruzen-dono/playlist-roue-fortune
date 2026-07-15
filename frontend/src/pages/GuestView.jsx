@@ -22,6 +22,22 @@ function playBeep() {
   } catch { /* Web Audio pas dispo */ }
 }
 
+// ─── Toast → feedback rapide ─────────────────────────────────
+function showToast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  Object.assign(el.style, {
+    position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)',
+    padding: '10px 20px', borderRadius: '8px', zIndex: 9999,
+    background: type === 'error' ? '#b91c1c' : '#065f46',
+    color: '#fff', fontSize: '0.9rem', fontWeight: 600,
+    animation: 'fadeIn 0.2s ease-out',
+  });
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 2000);
+}
+
 export default function GuestView() {
   const { sessionId } = useParams();
   const { socket } = useSocket();
@@ -29,6 +45,8 @@ export default function GuestView() {
   useGameEvents();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [requestingTrack, setRequestingTrack] = useState(null);
+  const [skipDisabled, setSkipDisabled] = useState(false);
 
   // Reconnexion automatique : ré-émettre guest:join à chaque (re)connexion
   useEffect(() => {
@@ -42,9 +60,7 @@ export default function GuestView() {
         socket.emit('guest:join', identity, (res) => {
           if (res?.session) game.updateFromState(res.session);
         });
-      } catch (e) {
-        // sessionStorage corrompu, ignorer
-      }
+      } catch (e) { /* sessionStorage corrompu */ }
     };
     socket.on('connect', rejoin);
     return () => socket.off('connect', rejoin);
@@ -58,27 +74,41 @@ export default function GuestView() {
   };
 
   const addTrack = (track) => {
+    if (requestingTrack === track.id) return;
+    setRequestingTrack(track.id);
     socket.emit('guest:add-track', { track }, (res) => {
-      if (res.error) return alert(res.error);
+      setRequestingTrack(null);
+      if (res.error) { showToast(res.error, 'error'); return; }
       setSearchResults([]);
       setSearchQuery('');
+      showToast('Ajouté à la file !', 'success');
     });
   };
 
   const voteSkip = () => {
+    if (skipDisabled || !game.currentTrack?.trackUri) return;
+    setSkipDisabled(true);
     socket.emit('guest:vote-skip', { trackId: game.currentTrack?.trackUri }, (res) => {
-      if (res?.error) alert(res.error);
+      setSkipDisabled(false);
+      if (res?.error) { showToast(res.error, 'error'); return; }
+      if (res?.skipped) showToast('Morceau skip !', 'success');
+      else showToast(`Skip: ${res.currentVotes || 0}/${res.threshold || '?'} votes`);
     });
   };
 
-  const voteBoost = (trackId) => {
-    socket.emit('guest:vote-boost', { trackId }, (res) => {
-      if (res?.error) alert(res.error);
+  const voteBoost = () => {
+    const track = game.currentTrack;
+    if (!track?.trackUri) return;
+    socket.emit('guest:vote-boost', { trackId: track.trackUri }, (res) => {
+      if (res?.error) { showToast(res.error, 'error'); return; }
+      showToast('Boosté ! (+1 en tête de file)', 'success');
     });
   };
 
   const submitQuizAnswer = (answer) => {
-    socket.emit('guest:quiz-answer', { answer }, () => {});
+    socket.emit('guest:quiz-answer', { answer }, (res) => {
+      if (res?.correct) showToast('Bonne réponse !', 'success');
+    });
   };
 
   return (
@@ -105,7 +135,7 @@ export default function GuestView() {
 
       {/* Résultats du blind-test (invité) */}
       {game.quizRevealed && game.quizResults && (
-        <QuizResults round={game.quizResults.round} answer={game.quizResults.answer} />
+        <QuizResultsComponent round={game.quizResults.round} answer={game.quizResults.answer} results={game.quizResults.results} />
       )}
 
       {/* Jukebox mode */}
@@ -117,8 +147,10 @@ export default function GuestView() {
               <div className="now-title">{game.currentTrack.title}</div>
               <div className="now-artist">{game.currentTrack.artist}</div>
               <div className="action-row">
-                <button className="btn btn-danger" onClick={voteSkip}>Skip</button>
-                <button className="btn btn-secondary" onClick={() => voteBoost(game.currentTrack.trackUri)}>Boost</button>
+                <button className="btn btn-danger" onClick={voteSkip} disabled={skipDisabled}>
+                  {skipDisabled ? '...' : 'Skip'}
+                </button>
+                <button className="btn btn-secondary" onClick={voteBoost}>Boost</button>
               </div>
             </div>
           )}
@@ -139,7 +171,9 @@ export default function GuestView() {
                       {track.artists.map(a => a.name).join(', ')}
                     </div>
                   </div>
-                  <button className="add-btn" onClick={() => addTrack(track)}>+5</button>
+                  <button className="add-btn" onClick={() => addTrack(track)} disabled={requestingTrack === track.id}>
+                    {requestingTrack === track.id ? '...' : '+5'}
+                  </button>
                 </div>
               ))}
             </div>
@@ -154,44 +188,77 @@ export default function GuestView() {
   );
 }
 
-function QuizResults({ round, answer }) {
+// ─── Résultats du quiz (invité) ──────────────────────────────
+function QuizResultsComponent({ round, answer, results }) {
+  const answerOk = answer && typeof answer === 'object';
   return (
     <div className="quiz-container quiz-results">
       <div className="quiz-header">Blind-test — Round {round}</div>
       <div className="quiz-answer-reveal">
         <div className="quiz-hint">🎯 C'était :</div>
-        <div className="quiz-reveal-title">{answer.title}</div>
-        <div className="quiz-reveal-artist">{answer.artist}</div>
+        <div className="quiz-reveal-title">{answerOk ? answer.title : '—'}</div>
+        <div className="quiz-reveal-artist">{answerOk ? answer.artist : '—'}</div>
       </div>
-      <div className="quiz-waiting">
-        En attente du round suivant...
-      </div>
+
+      {/* Résultats des joueurs */}
+      {results && results.length > 0 && (
+        <div className="results-table">
+          <div className="results-table-header">
+            <span>Joueur</span>
+            <span>Réponse</span>
+            <span>Score</span>
+          </div>
+          {results.map((r, i) => (
+            <div key={i} className={`results-row ${r.score > 0 ? 'results-row-correct' : 'results-row-wrong'}`}>
+              <span className="results-name">{r.username}</span>
+              <span className="results-answer">{r.answer || '—'}</span>
+              <span className="results-score">+{r.score}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(!results || results.length === 0) && (
+        <div className="quiz-waiting">Aucune réponse reçue</div>
+      )}
+
+      <div className="quiz-waiting">En attente du round suivant...</div>
     </div>
   );
 }
 
+// ─── Carte quiz (question + timer) ───────────────────────────
 function QuizCard({ round, timer, quizEndsAt, onSubmit }) {
   const [answer, setAnswer] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(timer);
+  const [progress, setProgress] = useState(100);
 
   useEffect(() => {
     setSubmitted(false);
     setAnswer('');
 
-    // Si on a un timestamp absolu, on recalcule le timer en temps réel
     if (quizEndsAt) {
-      const tick = () => setTimeLeft(Math.max(0, Math.round((quizEndsAt - Date.now()) / 1000)));
+      const tick = () => {
+        const remaining = Math.max(0, Math.round((quizEndsAt - Date.now()) / 1000));
+        setTimeLeft(remaining);
+        const total = timer || 30;
+        setProgress((remaining / total) * 100);
+      };
       tick();
-      const id = setInterval(tick, 1000);
+      const id = setInterval(tick, 100);
       return () => clearInterval(id);
     }
 
-    // Fallback timer reçu (si pas de timestamp absolu)
     setTimeLeft(timer);
+    setProgress(100);
     if (timer <= 0) return;
     const interval = setInterval(() => {
-      setTimeLeft(prev => prev <= 1 ? (clearInterval(interval), 0) : prev - 1);
+      setTimeLeft(prev => {
+        if (prev <= 1) { clearInterval(interval); setProgress(0); return 0; }
+        setProgress(((prev - 1) / timer) * 100);
+        return prev - 1;
+      });
     }, 1000);
     return () => clearInterval(interval);
   }, [round, timer, quizEndsAt]);
@@ -207,12 +274,20 @@ function QuizCard({ round, timer, quizEndsAt, onSubmit }) {
     setSubmitted(true);
   };
 
+  const barColor = progress > 50 ? '#22c55e' : progress > 20 ? '#eab308' : '#ef4444';
+
   return (
     <div className="quiz-container">
       <div className="quiz-header">Blind-test — Round {round}</div>
       <div className={`quiz-timer ${timeLeft <= 10 ? 'quiz-timer-danger' : 'quiz-timer-safe'}`}>
         {timeLeft > 0 ? `${timeLeft}s` : 'Temps !'}
       </div>
+
+      {/* Barre de progression */}
+      <div className="timer-bar-track">
+        <div className="timer-bar-fill" style={{ width: `${progress}%`, background: barColor }} />
+      </div>
+
       <div className="quiz-hint">Quel morceau est en train de jouer ?</div>
       {!submitted && timeLeft > 0 ? (
         <>
@@ -222,7 +297,7 @@ function QuizCard({ round, timer, quizEndsAt, onSubmit }) {
         </>
       ) : (
         <div className={submitted ? 'quiz-submitted' : 'quiz-reveal'}>
-          {submitted ? 'Réponse envoyée' : 'Révélation...'}
+          {submitted ? 'Réponse envoyée ✓' : 'Révélation...'}
         </div>
       )}
     </div>

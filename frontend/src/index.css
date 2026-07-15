@@ -968,6 +968,59 @@ a:hover { text-decoration: underline; }
   border-color: var(--gold);
 }
 
+/* ─── Résultats du Blind-test (tableau) ─────────────────────── */
+.results-table {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 215, 0, 0.15);
+  font-size: 0.85rem;
+}
+.results-table-header,
+.results-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 60px;
+  gap: 8px;
+  padding: 6px 0;
+  align-items: center;
+}
+.results-table-header {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+}
+.results-row + .results-row { border-top: 1px solid rgba(255,255,255,0.04); }
+.results-row-correct .results-score { color: var(--green, #22d65e); }
+.results-row-wrong .results-score { color: var(--danger); }
+.results-row-correct { color: #86efac; }
+.results-row-wrong { color: var(--text-dim); }
+.results-row .results-answer { color: inherit; font-style: italic; }
+
+/* ─── Timer progress bar (guest quiz) ───────────────────────── */
+.timer-bar-track {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  margin: -4px 0 16px;
+  overflow: hidden;
+}
+.timer-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.1s linear, background 0.3s;
+}
+
+/* ─── Toast notifications ───────────────────────────────────── */
+@keyframes toastIn {
+  from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+  to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+@keyframes toastOut {
+  from { transform: translateX(-50%) translateY(0); opacity: 1; }
+  to { transform: translateX(-50%) translateY(20px); opacity: 0; }
+}
+
 @media (max-width: 480px) {
   .page { padding: 24px 12px; }
   .card { padding: 24px 18px; }
