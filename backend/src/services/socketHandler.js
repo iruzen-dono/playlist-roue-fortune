@@ -198,7 +198,8 @@ export function setupSocketHandlers(io) {
         // Relancer un quiz
         game.setMode(MODE.QUIZ);
         game.quizRound++;
-        launchQuizRound(io, game, currentSession);
+        const played = playedQuizTracks.get(currentSession) || [];
+        launchQuizRound(io, game, currentSession, played);
         return;
       }
 
@@ -477,7 +478,16 @@ function interleaveQueue(game) {
   game.queue = interleaved;
 }
 
+// Map des sessions en train de lancer un quiz round (anti-double-click)
+const launchingQuiz = new Set();
+
 async function launchQuizRound(io, game, sessionId, alreadyPlayed = []) {
+  if (launchingQuiz.has(sessionId)) {
+    console.log('[Quiz] Already launching round for session', sessionId, '— skipped');
+    return;
+  }
+
+  launchingQuiz.add(sessionId);
   try {
     const guests = Array.from(game.guests.values());
     const quizTrack = await generateQuizTrack(guests, config.llm, alreadyPlayed);
@@ -499,5 +509,11 @@ async function launchQuizRound(io, game, sessionId, alreadyPlayed = []) {
     });
   } catch (err) {
     console.error('[Quiz] Failed to launch round:', err);
+    game.quizRound = Math.max(1, game.quizRound - 1);
+    io.to(`session:${sessionId}`).emit('quiz:launch-error', { message: 'Erreur génération round — réessaie' });
+  } finally {
+    launchingQuiz.delete(sessionId);
   }
 }
+
+export { launchQuizRound };

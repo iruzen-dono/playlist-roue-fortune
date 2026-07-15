@@ -41,6 +41,7 @@ export default function HostDashboard() {
   const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [spotifyLoading, setSpotifyLoading] = useState(false);
   const [spotifyError, setSpotifyError] = useState('');
+  const [quizLoading, setQuizLoading] = useState(false);
   const playerRef = useRef(null);
   const [searchParams] = useSearchParams();
 
@@ -90,6 +91,16 @@ export default function HostDashboard() {
     };
     socket.on('spotify:device-ready', handleReady);
     return () => socket.off('spotify:device-ready', handleReady);
+  }, [socket]);
+
+  // Réinitialiser quizLoading au démarrage d'un round ou en cas d'erreur
+  useEffect(() => {
+    if (!socket) return;
+    const onQuizStart = () => setQuizLoading(false);
+    const onQuizError = () => { setQuizLoading(false); alert('Erreur de génération du blind-test — réessaie'); };
+    socket.on('quiz:start', onQuizStart);
+    socket.on('quiz:launch-error', onQuizError);
+    return () => { socket.off('quiz:start', onQuizStart); socket.off('quiz:launch-error', onQuizError); };
   }, [socket]);
 
   const loadSpotifySDK = () => {
@@ -198,6 +209,7 @@ export default function HostDashboard() {
   };
 
   const continueAfterQuiz = () => {
+    setQuizLoading(true);
     socket.emit('host:continue-after-quiz');
   };
 
@@ -293,8 +305,9 @@ export default function HostDashboard() {
                     </div>
                   ) : (
                     <div className="controls-group">
-                      <button className="btn btn-secondary" onClick={continueAfterQuiz}>
-                        Continuer
+                      <button className="btn btn-secondary" onClick={continueAfterQuiz}
+                        disabled={quizLoading}>
+                        {quizLoading ? 'Génération...' : 'Continuer'}
                       </button>
                       <button className="btn btn-ghost" onClick={startJukebox}>
                         Passer au jukebox
