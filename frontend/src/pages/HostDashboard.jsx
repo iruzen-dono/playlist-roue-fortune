@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
@@ -8,6 +8,12 @@ import PlayerList from '../components/PlayerList';
 import QueueDisplay from '../components/QueueDisplay';
 
 const SPOTIFY_SDK_URL = 'https://sdk.scdn.co/spotify-player.js';
+
+const MOODS = [
+  { id: 'chill', label: 'Chill', emoji: '🧘' },
+  { id: 'balanced', label: 'Balance', emoji: '⚖️' },
+  { id: 'energetic', label: 'Dansant', emoji: '🕺' },
+];
 
 export default function HostDashboard() {
   const { sessionId } = useParams();
@@ -26,13 +32,11 @@ export default function HostDashboard() {
     if (!isLocal) {
       setNgrokUrl(`https://${currentHost}`);
     } else {
-      // Depuis localhost, récupérer l'URL publique depuis le backend
       fetch('/api/config/url')
         .then(r => r.json())
         .then(d => { if (d.publicUrl) setNgrokUrl(d.publicUrl); })
         .catch(() => {});
     }
-    // Récupérer l'IP locale pour les invités sur le même WiFi
     fetch('/api/config/local-ip')
       .then(r => r.json())
       .then(d => { if (d.localIp) setLocalIp(`http://${d.localIp}:${d.port}`); })
@@ -46,6 +50,68 @@ export default function HostDashboard() {
   const spotifyRetryRef = useRef(0);
   const [hostTimeLeft, setHostTimeLeft] = useState(null);
   const [searchParams] = useSearchParams();
+
+  // ─── Host Vibe Panel state ───
+  const [curatedArtists, setCuratedArtists] = useState([]);
+  const [hostArtists, setHostArtists] = useState([]);
+  const [hostMood, setHostMood] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [loadingArtists, setLoadingArtists] = useState(false);
+
+  // Charger la liste curated au montage
+  useEffect(() => {
+    setLoadingArtists(true);
+    fetch('/api/curated-artists')
+      .then(r => r.json())
+      .then(data => {
+        setCuratedArtists(data.artists || []);
+        setLoadingArtists(false);
+      })
+      .catch(() => setLoadingArtists(false));
+  }, []);
+
+  const toggleHostArtist = (artist) => {
+    setHostArtists(prev => {
+      const exists = prev.find(a => a.id === artist.id);
+      if (exists) return prev.filter(a => a.id !== artist.id);
+      if (prev.length >= 5) return prev;
+      return [...prev, artist];
+    });
+  };
+
+  const handleSearch = () => {
+    if (!searchQuery.trim()) return;
+    fetch(`/api/search-artists?q=${encodeURIComponent(searchQuery.trim())}`)
+      .then(r => r.json())
+      .then(data => {
+        setSearchResults(data.artist ? [data.artist] : []);
+      })
+      .catch(() => setSearchResults([]));
+  };
+
+  const addSearched = (artist) => {
+    toggleHostArtist(artist);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  // Aggréger les artistes likés par les invités
+  const guestTaste = useMemo(() => {
+    const counts = {};
+    game.guests.forEach(guest => {
+      (guest.likedArtists || []).forEach(a => {
+        const key = a.id || a.name;
+        if (!counts[key]) {
+          counts[key] = { ...a, count: 0 };
+        }
+        counts[key].count += 1;
+      });
+    });
+    return Object.values(counts).sort((a, b) => b.count - a.count);
+  }, [game.guests]);
+
+  // ─── Fin Vibe Panel ───
 
   // Détecter retour OAuth
   useEffect(() => {
@@ -118,8 +184,6 @@ export default function HostDashboard() {
   }, [game.quizEndsAt]);
 
   const loadSpotifySDK = () => {
-    // CRITIQUE : définir le callback AVANT de charger le script,
-    // sinon le SDK l'appelle avant qu'il ne soit défini
     window.onSpotifyWebPlaybackSDKReady = () => {
       let timedOut = false;
       const timeout = setTimeout(() => {
@@ -183,50 +247,39 @@ export default function HostDashboard() {
         setSpotifyLoading(false);
       });
 
-      player.addListener('autoplay_failed', () => {
-        console.warn('[Spotify] Autoplay bloqué par le navigateur');
-        setSpotifyError('Le navigateur bloque le son — clique à nouveau sur "Lancer la soirée".');
-      });
-
-      player.connect().then(success => {
+      player.addListener('account_error', ({ message }) => {
+        console.error('[Spotify] Account error:', message);
         clearTimeout(timeout);
-        if (!success) {
-          setSpotifyError('Impossible de connecter le player Spotify');
-          setSpotifyLoading(false);
-        }
+        setSpotifyError('Compte non Premium. Abonnement Premium requis.');
+        setSpotifyLoading(false);
       });
 
       playerRef.current = player;
+      player.connect().then(success => {
+        if (!success) {
+          clearTimeout(timeout);
+          setSpotifyError('Impossible de lancer le player — réessaie');
+          setSpotifyLoading(false);
+        }
+      });
     };
 
     const script = document.createElement('script');
     script.src = SPOTIFY_SDK_URL;
-    script.onerror = () => {
-      setSpotifyError('Impossible de charger le SDK Spotify — vérifie ta connexion');
-      setSpotifyLoading(false);
-    };
-    document.body.appendChild(script);
+    document.head.appendChild(script);
   };
 
-  const retrySpotifySDK = () => {
-    spotifyRetryRef.current += 1;
-    if (spotifyRetryRef.current >= 3) {
-      setSpotifyError('Échec après 3 tentatives — rafraîchis la page ou réessaie plus tard');
-      return;
-    }
-    setSpotifyError('');
-    setSpotifyLoading(true);
-    // Nettoyer l'ancien script SDK s'il existe
-    document.querySelectorAll(`script[src="${SPOTIFY_SDK_URL}"]`).forEach(s => s.remove());
-    loadSpotifySDK();
-  };
+  // ─── Handlers ───
 
   const startEvening = () => {
-    // Débloque la lecture audio (politique autoplay des navigateurs) :
-    // le SDK a besoin d'un vrai clic pour "activer" l'élément audio interne,
-    // sinon Spotify joue "dans le vide" côté navigateur.
-    playerRef.current?.activateElement?.();
-    socket.emit('host:start-evening', { sessionId }, (res) => {
+    if (!socket) return;
+    socket.emit('host:start-evening', {
+      sessionId,
+      hostPreferences: {
+        likedArtists: hostArtists,
+        mood: hostMood,
+      },
+    }, (res) => {
       if (res.error) alert(res.error);
     });
   };
@@ -250,6 +303,13 @@ export default function HostDashboard() {
 
   const handleConnectSpotify = () => {
     window.location.href = `/api/spotify/login?session=${sessionId}`;
+  };
+
+  const retrySpotifySDK = () => {
+    spotifyRetryRef.current += 1;
+    setSpotifyError('');
+    setSpotifyLoading(true);
+    loadSpotifySDK();
   };
 
   const joinUrl = `${ngrokUrl || window.location.origin}/join/${sessionId}`;
@@ -292,6 +352,115 @@ export default function HostDashboard() {
           <div className="panel" style={{ textAlign: 'center' }}>
             <div className="panel-title">Connexion Spotify</div>
             <p style={{ color: 'var(--text-dim)' }}>Connexion en cours...</p>
+          </div>
+        )}
+
+        {/* ─── VIBE PANEL — avant le lancement ─── */}
+        {game.mode === 'MODE_LOBBY' && spotifyConnected && (
+          <div className="panel">
+            <div className="panel-title">Ambiance de la soirée</div>
+
+            {/* Mood */}
+            <div className="field" style={{ marginBottom: 16 }}>
+              <label className="label">Mood général</label>
+              <div className="mood-row">
+                {MOODS.map(m => (
+                  <button key={m.id}
+                    className={`mood-btn ${hostMood === m.id ? 'mood-btn-active' : ''}`}
+                    onClick={() => setHostMood(hostMood === m.id ? null : m.id)}>
+                    <span className="mood-emoji">{m.emoji}</span>
+                    <span>{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Recherche artiste hôte */}
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label className="label">Tes artistes (max 5)</label>
+              <div className="search-box">
+                <input className="search-input" placeholder="Cherche un artiste..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+                <button className="search-btn" onClick={handleSearch}>→</button>
+              </div>
+              {searchResults.length > 0 && (
+                <div className="artist-search-result" style={{ marginBottom: 8 }}>
+                  {searchResults.map(a => {
+                    const selected = hostArtists.some(s => s.id === a.id);
+                    return (
+                      <div key={a.id}
+                        className={`artist-search-card ${selected ? 'artist-search-card-selected' : ''}`}
+                        onClick={() => addSearched(a)}>
+                        {a.image && <img src={a.image} alt={a.name} className="artist-search-img" />}
+                        <div className="artist-search-info">
+                          <div className="artist-search-name">{a.name}</div>
+                          <div className="artist-search-genres">{a.genres?.slice(0, 2).join(', ') || ''}</div>
+                        </div>
+                        <div className="artist-search-check">{selected ? '✓' : '+'}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Grille artistes populaires (host) */}
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label className="label">Artistes populaires</label>
+              {loadingArtists ? (
+                <div className="artist-grid-loading">Chargement...</div>
+              ) : (
+                <div className="artist-grid-host">
+                  {curatedArtists.map(a => {
+                    const selected = hostArtists.some(s => s.id === a.id);
+                    return (
+                      <div key={a.id}
+                        className={`artist-card-host ${selected ? 'artist-card-host-selected' : ''}`}
+                        onClick={() => toggleHostArtist(a)}>
+                        <div className="artist-card-img-wrapper-host">
+                          {a.image ? (
+                            <img src={a.image} alt={a.name} className="artist-card-img" />
+                          ) : (
+                            <div className="artist-card-placeholder">{a.name[0]}</div>
+                          )}
+                          {selected && <div className="artist-card-check">✓</div>}
+                        </div>
+                        <div className="artist-card-name">{a.name}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Chips sélection host */}
+            {hostArtists.length > 0 && (
+              <div className="selected-chips">
+                {hostArtists.map(a => (
+                  <span key={a.id} className="chip" onClick={() => toggleHostArtist(a)}>
+                    {a.name} ✕
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Guest taste mosaic */}
+            {guestTaste.length > 0 && (
+              <div className="field" style={{ marginTop: 16 }}>
+                <label className="label">Tes invités aiment</label>
+                <div className="guest-taste-grid">
+                  {guestTaste.slice(0, 9).map(a => (
+                    <div key={a.id || a.name} className="guest-taste-card">
+                      {a.image && <img src={a.image} alt={a.name} className="guest-taste-img" />}
+                      <div className="guest-taste-name">{a.name}</div>
+                      {a.count > 1 && <div className="guest-taste-count">x{a.count}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -377,36 +546,12 @@ export default function HostDashboard() {
           <div className="panel now-playing">
             <div className="now-label">EN COURS</div>
             <div className="now-title">{game.currentTrack.title}</div>
-            <div className="now-artist">{game.currentTrack.artist}</div>
+            {game.currentTrack.artist && <div className="now-artist">{game.currentTrack.artist}</div>}
           </div>
         )}
 
-        {/* File d'attente */}
-        {/* Résultats du blind-test */}
-        {game.quizRevealed && game.quizResults && (
-          <div className="panel quiz-results">
-            <div className="panel-title">🎯 Round {game.quizResults.round} — Résultats</div>
-            <div className="quiz-answer-reveal">
-              <strong>Réponse :</strong> {game.quizResults.answer.title} — {game.quizResults.answer.artist}
-            </div>
-            <div className="quiz-scores">
-              {game.quizResults.results.length > 0 ? (
-                game.quizResults.results.map((r, i) => (
-                  <div key={i} className="quiz-score-row">
-                    <span>{r.username}</span>
-                    <span className="score-badge">+{r.score} pts</span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-dim">Personne n'a trouvé...</div>
-              )}
-            </div>
-          </div>
-        )}
-        <div className="panel">
-          <div className="panel-title">File d'attente ({game.queue.length})</div>
-          <QueueDisplay queue={game.queue} />
-        </div>
+        {/* Queue */}
+        <QueueDisplay />
       </div>
     </div>
   );
