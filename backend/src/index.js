@@ -3,6 +3,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import os from 'os';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config } from './config/index.js';
 import { initSupabase } from './services/supabaseService.js';
 import { setupSocketHandlers } from './services/socketHandler.js';
@@ -120,14 +122,15 @@ app.get('/api/config/local-ip', (req, res) => {
   }
 });
 
-// En production, servir le frontend build (APRÈS toutes les routes API)
-if (config.nodeEnv === 'production') {
-  app.use(express.static('public'));
-  app.get('/{*path}', (req, res) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return;
-    res.sendFile('public/index.html', { root: '.' });
-  });
-}
+// Servir le frontend build (mode dev: depuis frontend/dist, mode prod: depuis public)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const staticDir = path.resolve(__dirname, '../../frontend/dist');
+
+app.use(express.static(staticDir));
+app.get('/{*path}', (req, res) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return;
+  res.sendFile(path.join(staticDir, 'index.html'));
+});
 
 // Init Supabase (peut être null si pas configuré)
 initSupabase(config.supabase.url, config.supabase.anonKey);
