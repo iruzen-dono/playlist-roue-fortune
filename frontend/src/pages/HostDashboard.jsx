@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
@@ -8,12 +8,6 @@ import PlayerList from '../components/PlayerList';
 import QueueDisplay from '../components/QueueDisplay';
 
 const SPOTIFY_SDK_URL = 'https://sdk.scdn.co/spotify-player.js';
-
-const MOODS = [
-  { id: 'chill', label: 'Chill', emoji: '🧘' },
-  { id: 'balanced', label: 'Balance', emoji: '⚖️' },
-  { id: 'energetic', label: 'Dansant', emoji: '🕺' },
-];
 
 export default function HostDashboard() {
   const { sessionId } = useParams();
@@ -50,68 +44,7 @@ export default function HostDashboard() {
   const spotifyRetryRef = useRef(0);
   const [hostTimeLeft, setHostTimeLeft] = useState(null);
   const [searchParams] = useSearchParams();
-
-  // ─── Host Vibe Panel state ───
-  const [curatedArtists, setCuratedArtists] = useState([]);
-  const [hostArtists, setHostArtists] = useState([]);
-  const [hostMood, setHostMood] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [loadingArtists, setLoadingArtists] = useState(false);
-
-  // Charger la liste curated au montage
-  useEffect(() => {
-    setLoadingArtists(true);
-    fetch('/api/curated-artists')
-      .then(r => r.json())
-      .then(data => {
-        setCuratedArtists(data.artists || []);
-        setLoadingArtists(false);
-      })
-      .catch(() => setLoadingArtists(false));
-  }, []);
-
-  const toggleHostArtist = (artist) => {
-    setHostArtists(prev => {
-      const exists = prev.find(a => a.id === artist.id);
-      if (exists) return prev.filter(a => a.id !== artist.id);
-      if (prev.length >= 5) return prev;
-      return [...prev, artist];
-    });
-  };
-
-  const handleSearch = () => {
-    if (!searchQuery.trim()) return;
-    fetch(`/api/search-artists?q=${encodeURIComponent(searchQuery.trim())}`)
-      .then(r => r.json())
-      .then(data => {
-        setSearchResults(data.artist ? [data.artist] : []);
-      })
-      .catch(() => setSearchResults([]));
-  };
-
-  const addSearched = (artist) => {
-    toggleHostArtist(artist);
-    setSearchQuery('');
-    setSearchResults([]);
-  };
-
-  // Aggréger les artistes likés par les invités
-  const guestTaste = useMemo(() => {
-    const counts = {};
-    game.guests.forEach(guest => {
-      (guest.likedArtists || []).forEach(a => {
-        const key = a.id || a.name;
-        if (!counts[key]) {
-          counts[key] = { ...a, count: 0 };
-        }
-        counts[key].count += 1;
-      });
-    });
-    return Object.values(counts).sort((a, b) => b.count - a.count);
-  }, [game.guests]);
-
-  // ─── Fin Vibe Panel ───
+  const [nowPlaying, setNowPlaying] = useState(null);
 
   // Détecter retour OAuth
   useEffect(() => {
@@ -138,6 +71,24 @@ export default function HostDashboard() {
       }
     });
   }, [socket, sessionId]);
+
+  // Mettre à jour le now-playing quand currentTrack change
+  useEffect(() => {
+    if (game.currentTrack?.trackUri) {
+      const cover = game.currentTrack.album?.images?.[0]?.url
+        || game.currentTrack.album?.images?.[1]?.url
+        || game.currentTrack.album?.images?.[2]?.url
+        || null;
+      setNowPlaying({
+        title: game.currentTrack.title || 'Titre inconnu',
+        artist: game.currentTrack.artist || 'Artiste inconnu',
+        cover,
+        trackUri: game.currentTrack.trackUri,
+      });
+    } else {
+      setNowPlaying(null);
+    }
+  }, [game.currentTrack]);
 
   // Quand le morceau change → le jouer sur Spotify
   useEffect(() => {
@@ -266,6 +217,10 @@ export default function HostDashboard() {
 
     const script = document.createElement('script');
     script.src = SPOTIFY_SDK_URL;
+    script.onerror = () => {
+      setSpotifyError('Impossible de charger le SDK Spotify — vérifie ta connexion');
+      setSpotifyLoading(false);
+    };
     document.head.appendChild(script);
   };
 
@@ -275,10 +230,7 @@ export default function HostDashboard() {
     if (!socket) return;
     socket.emit('host:start-evening', {
       sessionId,
-      hostPreferences: {
-        likedArtists: hostArtists,
-        mood: hostMood,
-      },
+      hostPreferences: { likedArtists: [], mood: null },
     }, (res) => {
       if (res.error) alert(res.error);
     });
@@ -307,8 +259,13 @@ export default function HostDashboard() {
 
   const retrySpotifySDK = () => {
     spotifyRetryRef.current += 1;
+    if (spotifyRetryRef.current >= 3) {
+      setSpotifyError('Échec après 3 tentatives — rafraîchis la page ou réessaie plus tard');
+      return;
+    }
     setSpotifyError('');
     setSpotifyLoading(true);
+    document.querySelectorAll(`script[src="${SPOTIFY_SDK_URL}"]`).forEach(s => s.remove());
     loadSpotifySDK();
   };
 
@@ -330,6 +287,26 @@ export default function HostDashboard() {
           </div>
         </div>
 
+        {/* Now Playing — quand la musique tourne */}
+        {nowPlaying && (
+          <div className="now-playing">
+            <div className="now-playing-cover">
+              {nowPlaying.cover ? (
+                <img src={nowPlaying.cover} alt={nowPlaying.album} />
+              ) : (
+                <div className="now-playing-placeholder">♪</div>
+              )}
+            </div>
+            <div className="now-playing-info">
+              <div className="now-playing-title">{nowPlaying.title}</div>
+              <div className="now-playing-artist">{nowPlaying.artist}</div>
+            </div>
+            <div className="now-playing-bar">
+              <div className="now-playing-bar-inner" />
+            </div>
+          </div>
+        )}
+
         {/* Statut Spotify */}
         {!spotifyConnected && !spotifyLoading && (
           <div className="panel panel-spotify">
@@ -348,209 +325,102 @@ export default function HostDashboard() {
             )}
           </div>
         )}
+
         {spotifyLoading && (
-          <div className="panel" style={{ textAlign: 'center' }}>
-            <div className="panel-title">Connexion Spotify</div>
-            <p style={{ color: 'var(--text-dim)' }}>Connexion en cours...</p>
+          <div className="panel panel-spotify">
+            <div className="panel-title">Musique</div>
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+              Connexion à Spotify en cours...
+            </p>
           </div>
         )}
 
-        {/* ─── VIBE PANEL — avant le lancement ─── */}
-        {game.mode === 'MODE_LOBBY' && spotifyConnected && (
-          <div className="panel">
-            <div className="panel-title">Ambiance de la soirée</div>
-
-            {/* Mood */}
-            <div className="field" style={{ marginBottom: 16 }}>
-              <label className="label">Mood général</label>
-              <div className="mood-row">
-                {MOODS.map(m => (
-                  <button key={m.id}
-                    className={`mood-btn ${hostMood === m.id ? 'mood-btn-active' : ''}`}
-                    onClick={() => setHostMood(hostMood === m.id ? null : m.id)}>
-                    <span className="mood-emoji">{m.emoji}</span>
-                    <span>{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Recherche artiste hôte */}
-            <div className="field" style={{ marginBottom: 12 }}>
-              <label className="label">Tes artistes (max 5)</label>
-              <div className="search-box">
-                <input className="search-input" placeholder="Cherche un artiste..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSearch()} />
-                <button className="search-btn" onClick={handleSearch}>→</button>
-              </div>
-              {searchResults.length > 0 && (
-                <div className="artist-search-result" style={{ marginBottom: 8 }}>
-                  {searchResults.map(a => {
-                    const selected = hostArtists.some(s => s.id === a.id);
-                    return (
-                      <div key={a.id}
-                        className={`artist-search-card ${selected ? 'artist-search-card-selected' : ''}`}
-                        onClick={() => addSearched(a)}>
-                        {a.image && <img src={a.image} alt={a.name} className="artist-search-img" />}
-                        <div className="artist-search-info">
-                          <div className="artist-search-name">{a.name}</div>
-                          <div className="artist-search-genres">{a.genres?.slice(0, 2).join(', ') || ''}</div>
-                        </div>
-                        <div className="artist-search-check">{selected ? '✓' : '+'}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Grille artistes populaires (host) */}
-            <div className="field" style={{ marginBottom: 12 }}>
-              <label className="label">Artistes populaires</label>
-              {loadingArtists ? (
-                <div className="artist-grid-loading">Chargement...</div>
-              ) : (
-                <div className="artist-grid-host">
-                  {curatedArtists.map(a => {
-                    const selected = hostArtists.some(s => s.id === a.id);
-                    return (
-                      <div key={a.id}
-                        className={`artist-card-host ${selected ? 'artist-card-host-selected' : ''}`}
-                        onClick={() => toggleHostArtist(a)}>
-                        <div className="artist-card-img-wrapper-host">
-                          {a.image ? (
-                            <img src={a.image} alt={a.name} className="artist-card-img" />
-                          ) : (
-                            <div className="artist-card-placeholder">{a.name[0]}</div>
-                          )}
-                          {selected && <div className="artist-card-check">✓</div>}
-                        </div>
-                        <div className="artist-card-name">{a.name}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Chips sélection host */}
-            {hostArtists.length > 0 && (
-              <div className="selected-chips">
-                {hostArtists.map(a => (
-                  <span key={a.id} className="chip" onClick={() => toggleHostArtist(a)}>
-                    {a.name} ✕
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Guest taste mosaic */}
-            {guestTaste.length > 0 && (
-              <div className="field" style={{ marginTop: 16 }}>
-                <label className="label">Tes invités aiment</label>
-                <div className="guest-taste-grid">
-                  {guestTaste.slice(0, 9).map(a => (
-                    <div key={a.id || a.name} className="guest-taste-card">
-                      {a.image && <img src={a.image} alt={a.name} className="guest-taste-img" />}
-                      <div className="guest-taste-name">{a.name}</div>
-                      {a.count > 1 && <div className="guest-taste-count">x{a.count}</div>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* Section d'invitation */}
+        <div className="panel">
+          <div className="panel-title">Inviter des participants</div>
+          <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', marginBottom: 12 }}>
+            Scannez le QR code ou partagez le lien
+          </p>
+          <QRCodeComponent url={joinUrl} />
+          <div style={{ marginTop: 12 }}>
+            <code className="invite-link" onClick={() => navigator.clipboard?.writeText(joinUrl)}>
+              {joinUrl}
+            </code>
           </div>
-        )}
-
-        {/* Grille principale */}
-        <div className="dash-grid">
-          {/* QR Code + Lien */}
-          <div className="panel">
-            <div className="panel-title">Accès invités</div>
-            <div className="qr-wrapper">
-              <QRCodeComponent value={joinUrl} size={180} />
+          {localUrl && (
+            <div style={{ marginTop: 6 }}>
+              <code className="invite-link invite-link-local" onClick={() => navigator.clipboard?.writeText(localUrl)}>
+                {localUrl}
+              </code>
             </div>
-            <div className="input-readonly">Tunnel : {joinUrl}</div>
-            {localUrl && <div className="input-readonly" style={{ marginTop: 4, color: 'var(--green)' }}>📡 Local : {localUrl}</div>}
-          </div>
-
-          {/* Participants */}
-          <div className="panel">
-            <div className="panel-title">Participants</div>
-            <PlayerList guests={game.guests} compact />
-          </div>
-
-          {/* Contrôles */}
-          <div className="panel panel-wide">
-            <div className="panel-title">Contrôles</div>
-            <div className="controls-row">
-              {game.mode === 'MODE_LOBBY' && (
-                <button className="btn btn-primary" onClick={startEvening}
-                  disabled={game.guests.length === 0 || !spotifyConnected}>
-                  Lancer la soirée
-                </button>
-              )}
-              {game.mode === 'MODE_QUIZ' && (
-                <>
-                  <div className="badge badge-quiz">Blind-test Round {game.quizRound}</div>
-                  {hostTimeLeft !== null && (
-                    <div className="quiz-timer" style={{
-                      fontSize: '1.4rem',
-                      fontWeight: 700,
-                      color: hostTimeLeft <= 5 ? 'var(--danger)' : 'var(--accent)',
-                      minWidth: 40,
-                      textAlign: 'center',
-                    }}>
-                      {hostTimeLeft}s
-                    </div>
-                  )}
-                  {!game.quizRevealed ? (
-                    <div className="controls-group">
-                      <button className="btn btn-primary" onClick={revealQuiz}>
-                        Révéler
-                      </button>
-                      <button className="btn btn-ghost" onClick={startJukebox}>
-                        Passer au jukebox
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="controls-group">
-                      <button className="btn btn-secondary" onClick={continueAfterQuiz}
-                        disabled={quizLoading}>
-                        {quizLoading ? 'Génération...' : 'Continuer'}
-                      </button>
-                      <button className="btn btn-ghost" onClick={startJukebox}>
-                        Passer au jukebox
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-              {game.mode === 'MODE_JUKEBOX' && (
-                <button className="btn btn-primary" onClick={nextTrack}
-                  disabled={game.queue.length === 0}>
-                  Morceau suivant
-                </button>
-              )}
-              {game.mode === 'MODE_RECAP' && (
-                <div className="badge badge-quiz">🎉 Fin de la soirée</div>
-              )}
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* En cours */}
-        {game.currentTrack && (
-          <div className="panel now-playing">
-            <div className="now-label">EN COURS</div>
-            <div className="now-title">{game.currentTrack.title}</div>
-            {game.currentTrack.artist && <div className="now-artist">{game.currentTrack.artist}</div>}
+        {/* Contrôles / Actions */}
+        {spotifyConnected && game.mode === 'MODE_LOBBY' && (
+          <div className="panel">
+            <div className="panel-title">Prêt à lancer la soirée ?</div>
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', marginBottom: 12 }}>
+              {game.guests.length === 0
+                ? 'Attends que des invités rejoignent avant de commencer.'
+                : `${game.guests.length} participant${game.guests.length > 1 ? 's' : ''} dans la salle — lance la soirée quand tu veux !`}
+            </p>
+            <button className="btn btn-primary" onClick={startEvening} disabled={game.guests.length === 0}>
+              Lancer la soirée 🎉
+            </button>
           </div>
         )}
 
-        {/* Queue */}
+        {/* Pendant le jeu */}
+        {game.mode === 'MODE_QUIZ' && (
+          <div className="panel">
+            <div className="panel-title">
+              Blind-test Round {game.quizRound}
+              {hostTimeLeft !== null && (
+                <span className={`timer-badge ${hostTimeLeft <= 5 ? 'timer-critical' : ''}`}>
+                  {Math.floor(hostTimeLeft / 60)}:{(hostTimeLeft % 60).toString().padStart(2, '0')}
+                </span>
+              )}
+            </div>
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+              Le blind-test est en cours — les invités écoutent et répondent.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              <button className="btn btn-primary" onClick={revealQuiz} disabled={quizLoading}>
+                Révéler
+              </button>
+              <button className="btn btn-secondary" onClick={continueAfterQuiz} disabled={quizLoading}>
+                {quizLoading ? 'Génération...' : 'Continuer →'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {game.mode === 'MODE_JUKEBOX' && (
+          <div className="panel">
+            <div className="panel-title">Jukebox</div>
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+              Les invités peuvent ajouter leurs morceaux dans la file d'attente.
+            </p>
+            <button className="btn btn-secondary" onClick={nextTrack}>
+              Passer au suivant ⏭
+            </button>
+          </div>
+        )}
+
+        {game.quizRevealed && (
+          <div className="panel">
+            <div className="panel-title">Résultats du Blind-test</div>
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+              {game.quizAnswer?.title} — {game.quizAnswer?.artist}
+            </p>
+          </div>
+        )}
+
+        {/* Participants connectés */}
+        <PlayerList players={game.guests} />
+
+        {/* File d'attente */}
         <QueueDisplay />
       </div>
     </div>

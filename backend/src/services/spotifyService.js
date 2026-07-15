@@ -84,6 +84,10 @@ export async function resolveTracks(trackList, concurrency = 3) {
         trackUri: track?.uri || null,
         spotifyId: track?.id || null,
         resolved: !!track,
+        album: track?.album ? {
+          name: track.album.name,
+          images: track.album.images || [],
+        } : null,
       };
     }));
     results.push(...resolved);
