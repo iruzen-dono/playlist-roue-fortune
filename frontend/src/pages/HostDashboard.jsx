@@ -43,6 +43,7 @@ export default function HostDashboard() {
   const [spotifyError, setSpotifyError] = useState('');
   const [quizLoading, setQuizLoading] = useState(false);
   const playerRef = useRef(null);
+  const spotifyRetryRef = useRef(0);
   const [searchParams] = useSearchParams();
 
   // Détecter retour OAuth
@@ -188,10 +189,23 @@ export default function HostDashboard() {
     const script = document.createElement('script');
     script.src = SPOTIFY_SDK_URL;
     script.onerror = () => {
-      setSpotifyError('Impossible de charger le SDK Spotify');
+      setSpotifyError('Impossible de charger le SDK Spotify — vérifie ta connexion');
       setSpotifyLoading(false);
     };
     document.body.appendChild(script);
+  };
+
+  const retrySpotifySDK = () => {
+    spotifyRetryRef.current += 1;
+    if (spotifyRetryRef.current >= 3) {
+      setSpotifyError('Échec après 3 tentatives — rafraîchis la page ou réessaie plus tard');
+      return;
+    }
+    setSpotifyError('');
+    setSpotifyLoading(true);
+    // Nettoyer l'ancien script SDK s'il existe
+    document.querySelectorAll(`script[src="${SPOTIFY_SDK_URL}"]`).forEach(s => s.remove());
+    loadSpotifySDK();
   };
 
   const startEvening = () => {
@@ -254,6 +268,11 @@ export default function HostDashboard() {
               🎧 Connecter Spotify
             </button>
             {spotifyError && <div className="error" style={{ marginTop: 8 }}>{spotifyError}</div>}
+            {spotifyError && spotifyRetryRef.current < 3 && (
+              <button className="btn btn-secondary" style={{ marginTop: 6 }} onClick={retrySpotifySDK}>
+                Réessayer
+              </button>
+            )}
           </div>
         )}
         {spotifyLoading && (

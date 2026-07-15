@@ -2,7 +2,6 @@ import { config } from '../config/index.js';
 import { GameState, MODE } from '../services/gameState.js';
 import { generateInitialPlaylist, generateQuizTrack } from '../services/llmService.js';
 import { searchTracks, resolveTracks } from '../services/spotifyService.js';
-import { saveGuest } from '../services/supabaseService.js';
 import { playTrack, pausePlayback, skipToNext, setDeviceId, getValidAccessToken } from '../services/spotifyOAuth.js';
 import { saveGuestsToFile, loadGuestsFromFile } from '../services/localDb.js';
 
@@ -96,8 +95,6 @@ export function setupSocketHandlers(io) {
         const llmTracks = await generateInitialPlaylist(guests, config.llm);
         // 2. Résoudre les track_uri Spotify
         const resolved = await resolveTracks(llmTracks);
-
-        // 3. Ajouter à la queue (filtrer les tracks sans URI Spotify)
         for (const track of resolved) {
           if (!track.trackUri) continue;
           game.queue.push({
@@ -116,6 +113,7 @@ export function setupSocketHandlers(io) {
         playedQuizTracks.set(currentSession, []);
 
         // 5. Générer le premier son à deviner
+        io.to(`session:${sessionId}`).emit('quiz:loading');
         const quizTrack = await generateQuizTrack(guests, config.llm, []);
         const resolvedQuiz = await resolveTracks([quizTrack]);
         const quizLabel = `${resolvedQuiz[0].title} - ${resolvedQuiz[0].artist}`;
@@ -282,15 +280,6 @@ export function setupSocketHandlers(io) {
       socket.join(`session:${sessionId}`);
 
       console.log(`[Guest] ${username} joined ${sessionId}, room now has ${io.sockets.adapter.rooms.get(`session:${sessionId}`)?.size} sockets`);
-
-      // Enregistrer en DB (si configurée)
-      saveGuest({ sessionId, username, likedGenres, hatedGenres, favoriteArtists, points: config.game.defaultPoints });
-
-      // Mettre à jour le score du guest dans le state
-      const guestData = game.guests.get(username);
-      guestData.likedGenres = likedGenres || [];
-      guestData.hatedGenres = hatedGenres || [];
-      guestData.favoriteArtists = favoriteArtists || [];
 
       // Persistance locale (fallback quand Supabase absent)
       saveGuestsToFile(sessionId, game.guests);
@@ -488,6 +477,7 @@ async function launchQuizRound(io, game, sessionId, alreadyPlayed = []) {
   }
 
   launchingQuiz.add(sessionId);
+  io.to(`session:${sessionId}`).emit('quiz:loading');
   try {
     const guests = Array.from(game.guests.values());
     const quizTrack = await generateQuizTrack(guests, config.llm, alreadyPlayed);

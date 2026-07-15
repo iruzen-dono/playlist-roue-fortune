@@ -1,9 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useGame } from '../context/GameContext';
 import { useGameEvents } from '../hooks/useGameEvents';
 import QueueDisplay from '../components/QueueDisplay';
+
+// ─── Bip Web Audio ───────────────────────────────────────────
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'square';
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.4);
+  } catch { /* Web Audio pas dispo */ }
+}
 
 export default function GuestView() {
   const { sessionId } = useParams();
@@ -72,6 +89,14 @@ export default function GuestView() {
         </div>
         <div className="points-badge">{game.playerPoints} pts</div>
       </div>
+
+      {/* Loading overlay — génération du round en cours */}
+      {game.quizLoading && (
+        <div className="quiz-loading">
+          <div className="quiz-loading-spinner" />
+          <div className="quiz-loading-text">Génération du prochain round...</div>
+        </div>
+      )}
 
       {/* Quiz mode */}
       {game.mode === 'MODE_QUIZ' && !game.quizRevealed && (
@@ -170,6 +195,11 @@ function QuizCard({ round, timer, quizEndsAt, onSubmit }) {
     }, 1000);
     return () => clearInterval(interval);
   }, [round, timer, quizEndsAt]);
+
+  // Bip sonore à 5s restantes
+  useEffect(() => {
+    if (timeLeft === 5) playBeep();
+  }, [timeLeft]);
 
   const handleSubmit = () => {
     if (!answer.trim() || submitted) return;

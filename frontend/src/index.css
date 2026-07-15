@@ -722,3 +722,54 @@ a:hover { text-decoration: underline; }
   color: var(--danger);
   text-decoration: line-through;
 }
+
+/* ─── Quiz Loading ─── */
+.quiz-loading {
+  text-align: center;
+  padding: 64px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+}
+.quiz-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.quiz-loading-text {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+/* ─── Responsive mobile ─── */
+@media (max-width: 480px) {
+  .page { padding: 20px 12px; }
+  .card { padding: 20px; }
+  .panel { padding: 14px; }
+  .quiz-timer { font-size: 2.4rem; }
+  .now-title { font-size: 1.1rem; }
+  .now-artist { font-size: 0.85rem; }
+  .qr-wrapper img { width: 140px; height: 140px; }
+  .controls-row { flex-direction: column; align-items: stretch; }
+  .controls-row .btn { width: 100%; }
+  .controls-group { flex-direction: column; width: 100%; }
+  .controls-group .btn { width: 100%; }
+  .dash-header { flex-direction: column; gap: 8px; }
+  .guest-page { padding: 12px; }
+  .quiz-container { padding: 16px; }
+  .guest-header { flex-wrap: wrap; gap: 8px; }
+  .search-box { flex-direction: column; gap: 6px; }
+  .search-btn { width: 100%; }
+  .queue-item { gap: 8px; flex-wrap: wrap; }
+  .queue-meta { text-align: left; width: 100%; }
+  .action-row { flex-direction: column; gap: 8px; }
+  .action-row .btn { width: 100%; }
+  .guest-page .btn { width: 100%; }
+  .input-readonly { font-size: 0.65rem; }
+}

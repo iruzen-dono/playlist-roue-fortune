@@ -6,6 +6,23 @@ import { config } from '../config/index.js';
 let accessToken = null;
 let tokenExpiresAt = 0;
 
+// Retry helper avec exponential backoff pour les rate limits (429)
+async function fetchWithRetry(url, options = {}, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+
+    if (response.status !== 429) return response;
+
+    if (attempt < maxRetries) {
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+      console.warn(`[Spotify] Rate limited (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  // Dernière tentative — on laisse l'erreur remonter
+  throw new Error(`Spotify rate limited after ${maxRetries} retries`);
+}
+
 async function getClientCredentialsToken() {
   const { clientId, clientSecret } = config.spotify;
   if (!clientId || !clientSecret) return null;
@@ -37,22 +54,12 @@ async function searchTrack(query) {
   const tk = await ensureToken();
   if (!tk) return null;
 
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`,
     { headers: { 'Authorization': `Bearer ${tk}` } }
   );
 
-  if (response.status === 429) {
-    console.warn('[Spotify] search error: 429, retrying in 1s...');
-    await new Promise(r => setTimeout(r, 1000));
-    const retry = await fetch(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`,
-      { headers: { 'Authorization': `Bearer ${tk}` } }
-    );
-    if (!retry.ok) return null;
-    const data = await retry.json();
-    return data.tracks?.items?.[0] || null;
-  }
+  if (response.status === 429) return null; // déjà retryé dans fetchWithRetry
 
   if (!response.ok) {
     console.warn(`[Spotify] search error: ${response.status}`);
@@ -90,7 +97,7 @@ export async function searchTracks(query, limit = 10) {
   const tk = await ensureToken();
   if (!tk) return [];
 
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}`,
     { headers: { 'Authorization': `Bearer ${tk}` } }
   );

@@ -6,7 +6,6 @@ import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './config/index.js';
-import { initSupabase } from './services/supabaseService.js';
 import { setupSocketHandlers } from './services/socketHandler.js';
 import { getAuthUrl, exchangeCode, setHostTokens, setDeviceId, getValidAccessToken } from './services/spotifyOAuth.js';
 
@@ -131,9 +130,6 @@ app.get('/{*path}', (req, res) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return;
   res.sendFile(path.join(staticDir, 'index.html'));
 });
-
-// Init Supabase (peut être null si pas configuré)
-initSupabase(config.supabase.url, config.supabase.anonKey);
 
 // Socket handlers
 setupSocketHandlers(io);
