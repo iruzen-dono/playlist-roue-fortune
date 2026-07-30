@@ -100,10 +100,24 @@ app.post('/api/spotify/token', express.json(), async (req, res) => {
 });
 
 // Session debug endpoint (pour le host)
-app.get('/api/session/:sessionId', (req, res) => {
-  // Note: les sessions sont en mémoire, accessibles via le module socketHandler
-  // On expose via un import direct
-  res.json({ note: 'See websocket events for live session data' });
+app.get('/api/debug/sessions', async (req, res) => {
+  try {
+    const { getSessions } = await import('./services/socketHandler.js');
+    const sessions = getSessions();
+    const result = {};
+    for (const [id, game] of sessions) {
+      result[id] = {
+        mode: game.mode,
+        guestCount: game.guestCount(),
+        guests: Array.from(game.guests.keys()),
+        hostPreferences: !!game.hostPreferences,
+        createdAt: new Date(game.createdAt).toISOString(),
+      };
+    }
+    res.json({ sessions: result, count: sessions.size });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // URL publique pour le QR code (mettre PUBLIC_URL dans l'env du serveur)

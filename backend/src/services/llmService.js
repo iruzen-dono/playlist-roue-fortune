@@ -105,7 +105,17 @@ async function callOpenAILLM(messages, llmConfig, opts = {}) {
 
   if (!response.ok) throw new Error(`LLM request failed: ${response.status} ${response.statusText}`);
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
+  const message = data.choices?.[0]?.message;
+  let content = message?.content || '';
+
+  // Gérer les modèles de raisonnement (DeepSeek V4 Flash Free, etc.)
+  // qui mettent la réponse dans reasoning_content au lieu de content
+  if (!content && message?.reasoning_content) {
+    const rc = message.reasoning_content;
+    const jsonMatch = rc.match(/\{[^]*\}/);
+    content = jsonMatch ? jsonMatch[0] : rc;
+  }
+
   if (!content) throw new Error('Empty LLM response');
   return content;
 }
@@ -113,6 +123,16 @@ async function callOpenAILLM(messages, llmConfig, opts = {}) {
 async function callLLM(messages, llmConfig, opts = {}) {
   if (llmConfig.provider === 'cloudflare') {
     return callCFLLM(messages, llmConfig);
+  }
+  if (llmConfig.provider === 'deepseek') {
+    // DeepSeek API compatible OpenAI
+    const dsConfig = {
+      ...llmConfig,
+      endpoint: llmConfig.deepseekEndpoint,
+      model: llmConfig.deepseekModel,
+      apiKey: llmConfig.deepseekApiKey,
+    };
+    return callOpenAILLM(messages, dsConfig, opts);
   }
   return callOpenAILLM(messages, llmConfig, opts);
 }

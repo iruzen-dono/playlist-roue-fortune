@@ -25,6 +25,10 @@ export const config = {
     cfAccountId: process.env.CLOUDFLARE_ACCOUNT_ID,
     cfApiToken: process.env.CLOUDFLARE_API_TOKEN,
     cfModel: process.env.CF_LLM_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    // DeepSeek (compatible OpenAI)
+    deepseekEndpoint: process.env.DEEPSEEK_ENDPOINT || 'https://api.deepseek.com/v1/chat/completions',
+    deepseekModel: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+    deepseekApiKey: process.env.DEEPSEEK_API_KEY,
   },
 
   session: {

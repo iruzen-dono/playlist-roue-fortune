@@ -108,6 +108,18 @@ Supabase est optionnel — sans credentials, le fallback local est utilisé.
 
 ## Fixes importants (historique)
 
+### Blindtest illimité
+- **Changement :** Plus de limite de 4 rounds — `host:continue-after-quiz` relance toujours un nouveau quiz round
+- **Bouton :** "Round suivant →" remplace "Continuer →", ajout d'un bouton "Passer en jukebox" manuel
+- **Fichiers :** `socketHandler.js:host:continue-after-quiz`, `HostDashboard.jsx`
+
+### LLM OpenCode Zen + modèles reasoning
+- **Provider :** Passage de Cloudflare Workers AI à OpenCode Zen (`https://opencode.ai/zen/v1`)
+- **Modèle :** `deepseek-v4-flash-free` (compatible DeepSeek V4 Flash)
+- **Fix reasoning :** `callOpenAILLM` extrait le JSON de `reasoning_content` quand `content` est vide (modèles de raisonnement type DeepSeek R1)
+- **Clé API :** Clé OpenCode Zen (pas DeepSeek direct)
+- **Fichier :** `llmService.js:callOpenAILLM`
+
 ### Race condition SDK Spotify
 - **Symptôme :** "Connexion en cours..." ne se termine jamais
 - **Cause :** `window.onSpotifyWebPlaybackSDKReady` défini après le chargement du script
@@ -159,8 +171,11 @@ Supabase est optionnel — sans credentials, le fallback local est utilisé.
 | `SPOTIFY_REDIRECT_URI` | URL callback OAuth | Oui |
 | `PUBLIC_URL` | URL publique QR code | Oui |
 | `HOST_PASSWORD` | Mot de passe hôte | Non (défaut: admin123) |
-| `LLM_PROVIDER` | Provider IA : `cloudflare` ou `openai` | Non (fallback playlist statique) |
-| `CF_ACCOUNT_ID` | Account ID Cloudflare Workers AI | Non |
-| `CF_API_TOKEN` | API Token Cloudflare Workers AI | Non |
+| `LLM_PROVIDER` | Provider IA : `opencode-zen`, `cloudflare` ou `openai` | Non (fallback playlist statique) |
+| `LLM_ENDPOINT` | Endpoint API OpenAI-compatible (défaut: Groq) | Non |
+| `LLM_MODEL` | Modèle LLM (défaut: `llama-3.3-70b-versatile`) | Non |
+| `LLM_API_KEY` | Clé API (OpenCode Zen / OpenAI / Groq selon le provider) | Non |
+| `CLOUDFLARE_ACCOUNT_ID` | Account ID Cloudflare Workers AI | Non |
+| `CLOUDFLARE_API_TOKEN` | API Token Cloudflare Workers AI | Non |
 | `CF_LLM_MODEL` | Modèle CF (défaut: `@cf/meta/llama-3.3-70b-instruct-fp8-fast`) | Non |
-| `OPENAI_API_KEY` | Clé OpenAI (si LLM_PROVIDER=openai) | Non |
+| `DEEPSEEK_API_KEY` | Remplacé par `LLM_API_KEY` avec endpoint OpenCode Zen | Déprécié |

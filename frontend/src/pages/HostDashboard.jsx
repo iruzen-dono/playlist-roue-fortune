@@ -408,7 +408,10 @@ export default function HostDashboard() {
                 Révéler
               </button>
               <button className="btn btn-secondary" onClick={continueAfterQuiz} disabled={quizLoading}>
-                {quizLoading ? 'Génération...' : 'Continuer →'}
+                {quizLoading ? 'Génération...' : 'Round suivant →'}
+              </button>
+              <button className="btn btn-ghost" onClick={startJukebox} style={{ fontSize: '0.8rem' }}>
+                Passer en jukebox
               </button>
             </div>
           </div>

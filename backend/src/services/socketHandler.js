@@ -210,22 +210,14 @@ export function setupSocketHandlers(io) {
       });
     });
 
-    // Continuer après la révélation du quiz
+    // Continuer après la révélation du quiz → round illimité
     socket.on('host:continue-after-quiz', () => {
       const game = sessions.get(currentSession);
       if (!game) return;
       game.quizResponses.clear();
       const played = playedQuizTracks.get(currentSession) || [];
-      if (game.quizRound < config.game.blindTestRounds) {
-        game.quizRound++;
-        launchQuizRound(io, game, currentSession, played);
-      } else {
-        game.setMode(MODE.JUKEBOX);
-        game.songCountSinceLastQuiz = 0;
-        game.currentTrack = null;
-        io.to(`session:${currentSession}`).emit('game:state-update', game.toJSON());
-        io.to(`session:${currentSession}`).emit('jukebox:open');
-      }
+      game.quizRound++;
+      launchQuizRound(io, game, currentSession, played);
     });
 
     socket.on('host:next-track', () => {
@@ -571,4 +563,6 @@ async function launchQuizRound(io, game, sessionId, alreadyPlayed = []) {
   }
 }
 
+// Export de l'état des sessions pour debug
+export function getSessions() { return sessions; }
 export { launchQuizRound };
