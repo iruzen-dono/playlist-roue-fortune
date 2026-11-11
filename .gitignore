@@ -12,3 +12,4 @@ ngrok.yml
 backend/public/
 backend/data/
 backend/test-flow.mjs
+.oracle/
